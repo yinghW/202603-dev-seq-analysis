@@ -1,0 +1,240 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+
+```
+
+
+# Import data file
+
+```{r}
+df <- readRDS("/Volumes/Yinghui/202512-dev-seq-analyses/data/20C-202509-dev-seq-v5.rds")
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep,ind, plane, file) %>%
+  group_map(~ {
+    id <- paste(.y$temp,.y$biorep, .y$ind, .y$plane, .y$file, sep = "_")
+    
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+Temporary issue
+
+```{r}
+# 1. missing 1 landmark
+
+t <- c(4607.161391, 2099.636741)
+specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]] <- rbind(specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]], t)
+
+rownames(specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]]) <- NULL
+
+# 2. 1 csv has . instead of - between plane and date
+specs_list[["20_202509-dev-seq_2_OA_1011.OA-1X.csv"]][["metadata"]][["file"]] <- "1011-OA-1X.csv"
+```
+
+```{r}
+# add lm 10 in the TA plane
+specs_list<-add_lm10(specs_list)
+```
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+# GM
+
+## OA
+```{r}
+
+keep_idx <- sapply(specs_list, function(x) {
+  nrow(x$matrix) == 8 && ncol(x$matrix) == 2
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_idx]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# 2. Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+oa_3d_array <- simplify2array(matrix_list)
+
+# 3. (Optional) Assign specimen names to the 3rd dimension for tracking
+dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(oa_3d_array)
+```
+### GPA
+```{r}
+gpaOA <- gpagen(oa_3d_array)
+plotAllSpecimens(gpaOA$coords)
+```
+
+```{r}
+PCA_OA <- gm.prcomp(oa_3d_array)
+plot(PCA_OA)
+```
+
+## TA
+```{r}
+
+keep_idx <- sapply(specs_list, function(x) {
+  nrow(x$matrix) == 10 && ncol(x$matrix) == 2
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_idx]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# 2. Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+ta_3d_array <- simplify2array(matrix_list)
+
+# 3. (Optional) Assign specimen names to the 3rd dimension for tracking
+dimnames(ta_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(ta_3d_array)
+ta_final_points <- ta_3d_array[c(10,8,9,3,4), , ]
+```
+### GPA
+```{r}
+gpaTA <- gpagen(ta_final_points)
+plotAllSpecimens(gpaTA$coords)
+
+```
+## PCA
+
+```{r}
+PCA_TA <- gm.prcomp(gpaTA$coords)
+plot(PCA_TA)
+```
+
+
+Plot the PCA and the WRAP analysis 
+```{r}
+ref_ta <- mshape(gpaTA$coords)
+plot(ref_ta)
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/TAPCA.svg", width = 5, height = 5)
+plot(PCA_TA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     label = 1:nrow(PCA_TA$x),
+     main = "PCA of at Tentacular Plane")
+dev.off()
+
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp1max.svg", width = 5, height = 5)
+# Comp 1 max: 20_202509-dev-seq_7_TA_0911-TA.csv       0.0025558028
+plotRefToTarget(ref_ta, gpaTA$coords[,,64])
+dev.off()
+
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp2max.svg", width = 5, height = 5)
+# Comp 2 max: 20_202509-dev-seq_3_TA_0905-TA-2.csv  -0.3146686  0.2069715351
+
+plotRefToTarget(ref_ta, gpaTA$coords[,,40])
+dev.off()
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp1min.svg", width = 5, height = 5)
+# Comp 1 min: 20_202509-dev-seq_11_TA_0907-TA-2.csv -0.3870331  0.1244278701
+plotRefToTarget(ref_ta, gpaTA$coords[,,2])
+dev.off()
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp2min.svg", width = 5, height = 5)
+# Comp 2 min: 20_202509-dev-seq_2_TA_1011-TA-3.csv  -0.2531124 -0.1626295069
+plotRefToTarget(ref_ta, gpaTA$coords[,,37])
+dev.off()
+
+```
+
+```{r}
+PCA <- gm.prcomp(gpaTA$coords)
+summary(PCA)
+
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/PCA1.svg", plot=p, width=5, height=5)
+p <- plot(PCA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     main = "PCA of at Tentacular Plane")
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/TAPCA.svg", width = 5, height = 5)
+plot(PCA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     label = 1:nrow(PCA$x),
+     main = "PCA of at Tentacular Plane")
+dev.off()
+```
+
+
+
+```{r}
+picknplot.shape(p)
+```
+```{r}
+
+m <- as.matrix(p$PC.points)
+class(m)
+
+m["20_202509-dev-seq_7_TA_0911-TA.csv",]
+which(rownames(m) == "20_202509-dev-seq_7_TA_0911-TA.csv") 
+which(rownames(m) == "20_202509-dev-seq_3_TA_0905-TA-2.csv") 
+which(rownames(m) == "20_202509-dev-seq_11_TA_0907-TA-2.csv") 
+which(rownames(m) == "20_202509-dev-seq_2_TA_1011-TA-3.csv") 
+
+```
+```{r}
+fviz_pca_biplot(PCA,
+                select.var = list(contrib = 5), # Select top 5 contributing variables
+                repel = TRUE, # Avoid text overlaps
+                title = "PCA Biplot with Top 5 Contributing Variables"
+)
+```

@@ -1,0 +1,27 @@
+{
+    "id": "83CAD663",
+    "path": "D:/202512-dev-seq-analyses/code/data_import.R",
+    "project_path": "code/data_import.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1767220540353.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "43,25",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1767286964,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1767286962052,
+    "read_only": false,
+    "read_only_alternatives": []
+}

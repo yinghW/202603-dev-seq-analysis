@@ -1,0 +1,17 @@
+"0","dev<-ggarrange(fig_total, oa, fig_auricle, fig_lobe, ncol = 2, nrow = 2)"
+"2","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m"
+"2","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m"
+"2","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m"
+"2","Warning: [38;5;232mRemoved 60 rows containing non-finite outside the scale range (`stat_smooth()`).[39m"
+"2","Warning: [38;5;232mRemoved 60 rows containing non-finite outside the scale range
+(`stat_regline_equation()`).[39m"
+"2","Warning: [38;5;232mRemoved 60 rows containing missing values or values outside the scale range
+(`geom_point()`).[39m"
+"2","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m"
+"2","Warning: [38;5;232mRemoved 44 rows containing non-finite outside the scale range (`stat_smooth()`).[39m"
+"2","Warning: [38;5;232mRemoved 44 rows containing non-finite outside the scale range
+(`stat_regline_equation()`).[39m"
+"2","Warning: [38;5;232mRemoved 44 rows containing missing values or values outside the scale range
+(`geom_point()`).[39m"
+"0","ggsave(file=""/Volumes/Yinghui/202512-dev-seq-analyses/fig/dev.svg"", plot=dev)"
+"2","[38;5;232mSaving 7 x 7 in image[39m"

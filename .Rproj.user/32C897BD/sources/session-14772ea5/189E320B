@@ -1,0 +1,28 @@
+{
+    "id": "189E320B",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1767394474938.0,
+    "source_on_save": false,
+    "relative_order": 18,
+    "properties": {
+        "id": "f29fc409a1434b0993a878ca9ebf3ae0",
+        "name": "specs_list",
+        "title": "specs_list",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 2051282872144,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1767394474938,
+    "read_only": false,
+    "read_only_alternatives": []
+}

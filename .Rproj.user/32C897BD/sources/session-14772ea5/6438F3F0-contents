@@ -1,0 +1,165 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+```
+
+
+# Import data file
+
+```{r}
+df <- readRDS("D:/202512-dev-seq-analyses/data/20C-202509-dev-seq-v5.rds")
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep,ind, plane, file) %>%
+  group_map(~ {
+    id <- paste(.y$temp,.y$biorep, .y$ind, .y$plane, .y$file, sep = "_")
+    
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+Temporary issue
+
+```{r}
+# 1. missing 1 landmark
+
+t <- c(4607.161391, 2099.636741)
+specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]] <- rbind(specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]], t)
+
+rownames(specs_list[["20_202509-dev-seq_11_TA_1007-TA-2.csv"]][["matrix"]]) <- NULL
+
+# 2. 1 csv has . instead of - between plane and date
+specs_list[["20_202509-dev-seq_2_OA_1011.OA-1X.csv"]][["metadata"]][["file"]] <- "1011-OA-1X.csv"
+```
+
+```{r}
+# add lm 10 in the TA plane
+specs_list<-add_lm10(specs_list)
+```
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+# GM
+
+## OA
+```{r}
+
+keep_idx <- sapply(specs_list, function(x) {
+  nrow(x$matrix) == 8 && ncol(x$matrix) == 2
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_idx]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# 2. Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+oa_3d_array <- simplify2array(matrix_list)
+
+# 3. (Optional) Assign specimen names to the 3rd dimension for tracking
+dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(oa_3d_array)
+```
+### GPA
+```{r}
+gpaOA <- gpagen(oa_3d_array)
+plotAllSpecimens(gpaOA$coords)
+```
+
+```{r}
+PCA_OA <- gm.prcomp(oa_3d_array)
+plot(PCA_OA)
+```
+
+## TA
+```{r}
+
+keep_idx <- sapply(specs_list, function(x) {
+  nrow(x$matrix) == 10 && ncol(x$matrix) == 2
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_idx]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# 2. Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+ta_3d_array <- simplify2array(matrix_list)
+
+# 3. (Optional) Assign specimen names to the 3rd dimension for tracking
+dimnames(ta_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(ta_3d_array)
+ta_final_points <- ta_3d_array[c(10,8,9,3,4), , ]
+```
+### GPA
+```{r}
+gpaTA <- gpagen(ta_final_points)
+plotAllSpecimens(gpaTA$coords)
+```
+
+```{r}
+PCA_TA <- gm.prcomp(gpaTA$coords)
+plot(PCA_TA)
+```
+
+```{r}
+ref_ta <- mshape(gpaTA$coords)
+plot(ref_ta)
+plotRefToTarget(ref_ta, gpaTA$coords[,,1])
+plotRefToTarget(ref_ta, gpaTA$coords[,,5])
+plotRefToTarget(ref_ta, gpaTA$coords[,,10])
+plotRefToTarget(ref_ta, gpaTA$coords[,,20])
+```

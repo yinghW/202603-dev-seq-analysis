@@ -1,0 +1,61 @@
+# functions to import files from the cvs files
+# argument: dir of the file containing all csv files
+# return a [landmark number, x & y coordinate, # of image in sequence] matrix 
+
+# a function importing a series of 2D landmark csv files saved from fiji and return a matrix
+import_seq <- function(dir) {
+
+# makes a list of all .csv files that contain landmark data
+filelist <- list.files(path = dir,
+                         recursive = TRUE,
+                         pattern = "*A.csv") 
+
+# extracts names of specimens from the filename
+names <- gsub(".csv", "", filelist) 
+names <- mixedsort(names, decreasing = TRUE)
+print(names)
+
+# create a new matrix to take in the information 
+coords = NULL 
+
+# prep the directory of the data
+filelist_path <- paste(dir,filelist, sep="")
+
+# loop through all the file and read each csv file, only retrieved the x and y coordinates
+for (i in 1:length(filelist)){
+  tmp <- as.matrix(read.table(filelist_path[i], header = TRUE, sep = ",", colClasses = c("NULL", "NULL", "NULL", "NULL", "NULL","numeric","numeric")))
+  coords <- rbind(coords, tmp)
+}
+
+# transform the PAcoords to the arrayspecs format
+coords <- arrayspecs(coords, 16, 2)
+print(dim(coords))
+dimnames(coords)[[3]] <- names
+
+dim(coords)
+#closeAllConnections()
+
+return(coords)
+
+}
+
+
+# import the time file for each individual and return an array of the datetime
+import_datetime <- function(dir){
+  
+  # import data timestamp
+  time_csv = read.csv(paste(dir,"file_info.csv",sep = ""))
+  
+  # adapt it into the format for conversion
+  #time_csv$datatime <- paste(time_csv$Creation.Date, time_csv$Creation.Time, sep = " ")
+  time_csv$datatime <- paste(time_csv$Modified.Time)
+  
+  # convert the datatype to date
+  datetime <- as.POSIXct(time_csv$datatime)
+  
+  #delete the last one for file_info itself and reverse the order to match with the file name's order
+  datetime<-datetime[-20]
+  
+  return(datetime)
+  
+}

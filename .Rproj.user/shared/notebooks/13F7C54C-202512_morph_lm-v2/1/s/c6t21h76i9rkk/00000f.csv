@@ -1,0 +1,2 @@
+"0","p <- p + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = ""~~~~"")))"
+"0","p"

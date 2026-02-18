@@ -1,0 +1,26 @@
+{
+    "id": "D4710A21",
+    "path": "D:/202509-dev-seq/20C-202509-dev-seq/lm_to_dataframe.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1767254347312.0,
+    "source_on_save": false,
+    "relative_order": 10,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "39,14",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1767259722,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1767259722,
+    "read_only": false,
+    "read_only_alternatives": []
+}
