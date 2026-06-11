@@ -43,3 +43,29 @@ add_lm10 <- function(final_specs_list)
   
   return(final_specs_list)
 }
+#add lm 13 at mouth of the oa plane
+add_lm13 <- function(final_specs_list)
+{
+  for (id in names(final_specs_list)) {
+    
+    spec  <- final_specs_list[[id]]
+    mat   <- spec$matrix
+    plane <- spec$metadata$plane
+    
+    if (plane == "TA") {
+      # 1. Identify the two points (assuming Row 1 and Row 2 are LM1 and LM2)
+      p1 <- mat[1, ]
+      p2 <- mat[2, ]
+      
+      # 2. Calculate the midpoint
+      midpoint <- (p1 + p2) / 2
+      
+      # 3. Add it as a new row to the matrix
+      # We add it to the bottom, or you could insert it specifically
+      final_specs_list[[id]]$matrix <- rbind(mat, midpoint)
+      
+    }
+  }
+  
+  return(final_specs_list)
+}

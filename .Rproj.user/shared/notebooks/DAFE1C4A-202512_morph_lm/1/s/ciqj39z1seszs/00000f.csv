@@ -1,8 +1,0 @@
-"0","measurement <- c(""TABW"",""TCL"",""WAE"",""PW"")"
-"0","fig_total <- df_BL %>%"
-"0","  filter(measure_name %in% measurement) %>% # Only keeps these three"
-"0","  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +"
-"0","  geom_point() +"
-"0","  geom_smooth(method = ""lm"", se = FALSE) +"
-"0","  theme_classic() +scale_color_manual(values = c(""TABW"" = ""#546A7B"", ""TCL"" = ""#8FABB7"", ""WAE"" = ""#384F57"", ""PW"" = ""#8DB2F9""))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = ""~~~~"")))"
-"0",""

@@ -1,0 +1,208 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+Import the dataframe created in the load_dataframe.rmd
+```{r}
+df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
+df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
+df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+```
+
+```{r}
+ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
+geom_point(size = 1) +
+theme_classic()
+```
+```{r}
+measure_cols <- colnames(df_NoLA[,7:19])
+df_NoLA <-  df_NoLA  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/exp(mean(log(.x)))), 
+                .names = "shape_ratio_{.col}"))
+```
+
+## CVA
+
+```{r}
+library(MASS)
+
+#df_NoLA[,7:19]
+#df_NoLA[,21:33]
+#df_NoLA[,39:51]
+df_test <-df_NoLA[,21:33] %>% mutate (stage = df_NoLA$stage)
+  
+lda.stg <-lda(stage ~ ., data = df_test)
+lda.stg
+```
+
+plot
+```{r}
+stg.sub <- 
+  df_NoLA[,21:33]%>% 
+  as.matrix  # cast to matrix for calculations
+
+# calculate CV scores
+CVA.scores <- stg.sub %*% lda.stg$scaling
+
+# create data frame with scores
+stg.CV <- data.frame(CVA.scores)
+stg.CV$stage <- df_test$stage
+```
+
+```{r}
+cva.plot <-
+  ggplot(stg.CV, aes(x = LD1, y = LD2)) + 
+  geom_point(aes(color=stage, shape=stage), alpha=0.7) + 
+  labs(x = "CV1", y = "CV2") +
+  coord_fixed(ratio=1)  # keep the unit scaling of the plot fixed at 1
+
+cva.plot
+```
+
+```{r}
+ggplot(stg.CV, aes(x = LD1)) +
+  geom_density(aes(color=stage)) +
+  labs(x = "CV1")
+```
+
+#PCA
+```{r}
+measure_cols <- colnames(df_NoLA[,7:19])
+df_NoLA <-  df_NoLA  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/exp(mean(log(.x)))), 
+                .names = "shape_ratio_{.col}"))
+#df_NoLA[,7:19]
+#df_NoLA[,40:52],
+#f_NoLA[,21:33]
+ pca<- prcomp(df_NoLA[,21:33],
+                   center = TRUE,
+                   scale. = TRUE)
+
+```
+
+```{r}
+library(ggfortify)
+pca.plot <- autoplot(pca,
+                          data = df_NoLA,
+                          colour = 'stage')
+
+pca.plot
+```
+
+```{r}
+fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+fviz_contrib(pca, choice = "var", axes = 2, top = 10)
+fviz_contrib(pca, choice = "var", axes = 3, top = 10)
+```
+
+```{r}
+# Custom function for row-wise geometric mean
+rowGeometricMeans <- function(data, na.rm = TRUE) {
+  exp(rowMeans(log(data), na.rm = na.rm))
+}
+
+df_NoLA <- df_NoLA %>%
+  mutate(t_centroid = rowGeometricMeans(pick(all_of(measure_cols)), na.rm = TRUE))
+
+```
+
+```{r}
+df_plot <-df_NoLA %>%
+  mutate(
+    resPC1 = pca$x[, 1])
+
+ggplot(df_plot, aes(x = t_centroid, y = resPC1, color = stage)) +
+  geom_point() +
+  theme_classic() + labs(x = "size", y = "PC1 score")
+```
+
+### perform PCA on the residuls
+
+
+```{r}
+residual_data <- df_NoLA %>%
+  mutate(across(all_of(measure_cols), 
+    ~ residuals(lm(log(.x) ~ log(centroid), na.action = na.exclude))
+  )) %>%
+dplyr::select(all_of(measure_cols))
+```
+
+```{r}
+# Run PCA on the shape residuals
+pca_residual_result <- prcomp(residual_data, center = TRUE, scale. = TRUE)
+
+# Bind these new "Size-Free" PC scores back to your metadata
+df_final_plot <- df_NoLA %>%
+  mutate(
+    resPC1 = pca_residual_result$x[, 1],
+    resPC2 = pca_residual_result$x[, 2]
+  )
+```
+
+```{r}
+ggplot(df_final_plot, aes(x = centroid, y = resPC1, color = stage)) +
+  geom_point() +
+  scale_size_continuous(range = c(2, 6)) +
+  theme_classic()
+```
+
+```{r}
+# Extract loadings (rotations)
+loadings <- as.data.frame(pca_residual_result$rotation)
+loadings$Trait <- rownames(loadings)
+
+# Plot the structural impact of each trait on Residual PC1
+ggplot(loadings, aes(x = reorder(Trait, PC1), y = PC1)) +
+  geom_col(fill = "#384F57") +
+  coord_flip() +
+  labs(
+    title = "Trait Contributions to Residual PC1",
+    x = "Linear Measurement",
+    y = "Loading Score (Direction of Shape Change)"
+  ) +
+  theme_minimal()
+```
+```{r}
+fviz_contrib(pca_residual_result, choice = "var", axes = 1, top = 10)
+fviz_contrib(pca_residual_result, choice = "var", axes = 2, top = 10)
+fviz_contrib(pca_residual_result, choice = "var", axes = 3, top = 10)
+```
+PCA of the measurements of the residuals
+```{r}
+pca.plot_res <- autoplot(pca_residual_result,
+                          data = df_NoLA,
+                          colour = 'stage')
+
+pca.plot_res
+```

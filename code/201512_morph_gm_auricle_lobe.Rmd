@@ -1,0 +1,295 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+#library("mvMorph")
+```
+
+
+# Import data file
+
+```{r}
+#df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+#files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+
+# GM
+
+## OA
+```{r}
+
+keep_oa <- sapply(specs_list, function(x) {
+  x$metadata$plane == "OA"
+  
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_oa]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# Check row counts (Landmarks)
+table(sapply(matrix_list, nrow))
+
+# Check column counts (Coordinates - should be 2 for 2D, 3 for 3D)
+table(sapply(matrix_list, ncol))
+
+# Find which specimens don't have exactly 8 landmarks
+expected_count <- 8
+mismatched_indices <- which(sapply(matrix_list, nrow) != expected_count)
+
+# Print their names
+names(matrix_list)[mismatched_indices]
+
+# 3. Combine into 3D Array 
+# We use 'abind' or 'simplify2array', but check dimensions first
+if(length(unique(lapply(matrix_list, dim))) > 1) {
+  stop("Matrices have different dimensions! Check your landmark counts.")
+}
+
+oa_3d_array <- simplify2array(matrix_list)
+
+# 4. Assign names safely
+if (!is.null(names(format_filtered))) {
+  dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+}
+
+# Final Verification
+print(dim(oa_3d_array))
+```
+### GPA
+```{r}
+keep_layers <- apply(oa_3d_array, 3, function(x) !any(is.na(x)))
+cleaned_array <- oa_3d_array[,, keep_layers, drop = FALSE]
+```
+```{r}
+
+gpaOA <- gpagen(cleaned_array)
+plotAllSpecimens(gpaOA$coords)
+```
+
+```{r}
+PCA_OA <- gm.prcomp(cleaned_array)
+plot(PCA_OA)
+```
+
+## TA
+```{r}
+
+keep_idx <- sapply(specs_list, function(x) {
+  nrow(x$matrix) == 13 && ncol(x$matrix) == 2
+})
+
+# 2. Filter the list to keep only those specimens
+format_filtered <- specs_list[keep_idx]
+
+# 1. Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+matrix_list <- lapply(format_filtered, function(x) x$matrix)
+
+# Check row counts (Landmarks)
+table(sapply(matrix_list, nrow))
+
+# Check column counts (Coordinates - should be 2 for 2D, 3 for 3D)
+table(sapply(matrix_list, ncol))
+
+# Find which specimens don't have exactly 8 landmarks
+expected_count <- 8
+mismatched_indices <- which(sapply(matrix_list, nrow) != expected_count)
+
+# Print their names
+names(matrix_list)[mismatched_indices]
+
+
+# 2. Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+ta_3d_array <- simplify2array(matrix_list)
+
+# 3. (Optional) Assign specimen names to the 3rd dimension for tracking
+dimnames(ta_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(ta_3d_array)
+ta_final_points <- ta_3d_array[c(13,8,9,3,4) , ,]
+```
+### GPA
+
+```{r}
+gpaTA <- gpagen(ta_3d_array)
+plotAllSpecimens(gpaTA$coords)
+
+#svglite("D:/202603-dev-seq-analysis/fig/coords.svg", width = 5, height = 5)
+plotAllSpecimens(gpaTA$coords)
+#dev.off()
+
+```
+## PCA
+
+```{r}
+PCA_TA <- gm.prcomp(gpaTA$coords)
+plot(PCA_TA)
+```
+
+```{r}
+# Identify the index of the specimen at the positive extreme of PC1
+pc1_max_idx <- which.max(PCA_TA$x[, 1])
+
+# Identify the index of the specimen at the negative extreme of PC1
+pc1_min_idx <- which.min(PCA_TA$x[, 1])
+
+# Identify the index for PC2 extremes
+pc2_max_idx <- which.max(PCA_TA$x[, 2])
+pc2_min_idx <- which.min(PCA_TA$x[, 2])
+```
+
+```{r}
+# Extract the landmark matrix for the PC1 maximum position
+target_max_pc1 <- gpaTA$coords[, , pc1_max_idx]
+
+# Extract the landmark matrix for the PC1 minimum position
+target_min_pc1 <- gpaTA$coords[, , pc1_min_idx]
+
+# Extract the landmark matrix for the PC1 maximum position
+target_max_pc2 <- gpaTA$coords[, , pc2_max_idx]
+
+# Extract the landmark matrix for the PC1 minimum position
+target_min_pc2 <- gpaTA$coords[, , pc2_min_idx]
+```
+Plot the PCA and the WRAP analysis 
+```{r}
+ref_ta <- mshape(gpaTA$coords)
+plot(ref_ta)
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/TAPCA.svg", width = 5, height = 5)
+#svglite("D:/202603-dev-seq-analysis/fig/TAPCA.svg", width = 5, height = 5)
+plot(PCA_TA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     label = 1:nrow(PCA_TA$x),
+     main = "PCA of at Tentacular Plane")
+#dev.off()
+
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp1max.svg", width = 5, height = 5)
+#svglite("D:/202603-dev-seq-analysis/fig/comp1max.svg", width = 5, height = 5)
+
+# Comp 1 max: 20_202509-dev-seq_7_TA_0911-TA.csv       0.0025558028
+plotRefToTarget(ref_ta, target_max_pc1)
+#dev.off()
+
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp2max.svg", width = 5, height = 5)
+#svglite("D:/202603-dev-seq-analysis/fig/comp2max.svg", width = 5, height = 5)
+
+# Comp 2 max: 20_202509-dev-seq_3_TA_0905-TA-2.csv  -0.3146686  0.2069715351
+
+plotRefToTarget(ref_ta, target_max_pc2)
+#dev.off()
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp1min.svg", width = 5, height = 5)
+#svglite("D:/202603-dev-seq-analysis/fig/comp1min.svg", width = 5, height = 5)
+
+# Comp 1 min: 20_202509-dev-seq_11_TA_0907-TA-2.csv -0.3870331  0.1244278701
+plotRefToTarget(ref_ta, target_min_pc1)
+#dev.off()
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/comp2min.svg", width = 5, height = 5)
+#svglite("D:/202603-dev-seq-analysis/fig/comp2min.svg", width = 5, height = 5)
+# Comp 2 min: 20_202509-dev-seq_2_TA_1011-TA-3.csv  -0.2531124 -0.1626295069
+plotRefToTarget(ref_ta, target_min_pc2)
+#dev.off()
+
+```
+
+```{r}
+PCA <- gm.prcomp(gpaTA$coords)
+summary(PCA)
+
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/PCA1.svg", plot=p, width=5, height=5)
+p <- plot(PCA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     main = "PCA of at Tentacular Plane")
+#svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/TAPCA.svg", width = 5, height = 5)
+plot(PCA, 
+     pch = 21,              # Filled circles
+     bg = "#546A7B",             # Fill color
+     col = "black",         # Outline color
+     label = 1:nrow(PCA$x),
+     main = "PCA of at Tentacular Plane")
+#dev.off()
+```
+
+
+
+```{r}
+picknplot.shape(p)
+```
+
+```{r}
+fviz_pca_biplot(PCA,
+                select.var = list(contrib = 5), # Select top 5 contributing variables
+                repel = TRUE, # Avoid text overlaps
+                title = "PCA Biplot with Top 5 Contributing Variables"
+)
+```

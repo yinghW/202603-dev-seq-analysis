@@ -1,0 +1,1096 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+
+# Import data file
+
+Dir:"/Volumes/Yinghui/202512-dev-seq-analyses"
+
+```{r}
+# df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+#linear measurements
+```{r}
+measurement_accumulator <- list()
+
+for (id in names(specs_list)) {
+  
+  # 1. Extract components correctly
+  spec   <- specs_list[[id]]
+  mat    <- spec$matrix
+  plane  <- spec$metadata$plane
+  ind    <- spec$metadata$ind
+  temp <- spec$metadata$temp
+  biorep <- spec$metadata$biorep
+  file <- spec$metadata$file
+  measurer <- spec$metadata$measurer
+  
+ # print(file)
+  # 2. Initialize a placeholder for this specific iteration's results
+  res <- tibble()
+  
+ # print(file)
+  # 3. Apply custom "Design" logic
+  if (plane == "PA") {
+    res <- tibble(
+      measure_name = c("ALO", "AW", "WAE", "ATCL", "PABW"),
+      value = c(ALO_fun(mat), AW_fun(mat), WAE_fun(mat), ATCL_fun(mat), PABW_fun(mat))
+    )
+    
+  } else if (plane == "TA") {
+    res <- tibble(
+      measure_name = c("PL", "BL", "TCL", "LTM", "LL", "TABW", "AECL","TATB"),
+      value = c(PL_fun(mat), BL_fun(mat), TCL_fun(mat), LTM_fun(mat), 
+                LL_fun(mat), TABW_fun(mat), AECL_fun(mat), TATB_fun(mat))
+    )
+    
+  } else if (plane == "OA") {
+    res <- tibble(
+      measure_name = c("TBL", "PW", "ATAC", "AEAC"),
+      value = c(TBL_fun(mat), PW_fun(mat), ATAC_fun(mat), AEAC_fun(mat))
+    )
+  }
+  
+  # print(file)
+  # print(row(mat))
+  # print(file)
+  # 4. Add metadata and store in accumulator
+  # Only add if we actually generated results
+  if (nrow(res) > 0) {
+    measurement_accumulator[[id]] <- res %>%
+      mutate(
+        measurer = measurer,
+        sample_id = str_extract(basename(file), "^\\d+"),
+        ind = ind,
+        plane = plane,
+        temp = temp,
+        biorep = biorep
+      )
+  }
+}
+# 5. Bind into one large dataframe
+df_lm <- bind_rows(measurement_accumulator)
+
+df_lm <- df_lm %>% mutate(
+    # Convert from microns (or current unit) to mm
+    value = value / 1000
+  ) 
+```
+
+Removing the value of lobate and auricle when those structures are not present
+standard:
+ALO 0.07mm
+AW 0.07mm
+LTM 0.07mm
+LL 0.07mm
+```{r}
+threshold <- 0.07
+
+df_lm <- df_lm %>% mutate(across(
+    c(value), 
+    ~ if_else(measure_name %in% c("ALO", "AW", "LTM", "LL") & .x < threshold, NA_real_, .x)
+  ))
+  
+```
+
+convert the sample_id to date
+```{r}
+# Your sample data
+date_strings <- df_lm$sample_id
+
+# 1. Convert to Date objects (assuming the year 2026)
+# We use parse_date_time to handle the MMDD format
+dates <- parse_date_time(paste0(date_strings, "2026"), orders = "mdy")
+
+# 2. Define your starting date (the first date in your list)
+start_date <- dates[1]
+
+# 3. Calculate days elapsed
+days_diff <- as.numeric(difftime(dates, start_date, units = "days"))
+
+# Results
+df <- data.frame(
+  Original = date_strings,
+  Formatted_Date = dates,
+  Days_Since_Start = days_diff
+)
+
+#print(df)
+
+df_lm$exp_day <- df$Days_Since_Start
+```
+change the sample id to individual
+```{r}
+df_lm <- df_lm  %>%
+  mutate(sample_id = paste(ind, temp, biorep, sep = "-"))
+```
+
+## allometric dev visualisation
+
+### obtain the natural log of the value
+Common practice when studying allometric development because it is easier to deal with proportional variation.
+
+```{r}
+#create a new column with log value
+df_lm <- df_lm %>% mutate(log_value = log(value))
+```
+
+
+
+### plot allometric dev
+
+Using body length as the x axis
+only focusing on the 20C group
+```{r}
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, log_value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = value
+  ) %>%
+  # Filter to only rows where temp is 20
+  filter(temp == 20)
+
+```
+plot by individual
+
+plot all measurements together
+```{r}
+p1 <- ggplot(df_lmw, aes(x = BL, y = TABW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()+
+  theme_classic() +
+  labs(x = "Body length (mm)",
+      y = "Body width from tentacular axial plane (mm)")
+p1
+
+p2 <- ggplot(df_lmw, aes(x = ALO, y = AW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()+
+  theme_classic() +
+  labs(x = "Auricle length (mm)",
+      y = "auricle width (mm)")
+p2
+
+p3 <- ggplot(df_lmw, aes(x = LTM, y = LL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()+
+  theme_classic() +
+  labs(x = "Lobe tip to mouth distance (mm)",
+      y = "Lobe tip to the crux of lobe and auricle (mm)")
+p3
+
+df_lmw$TTL <- df_lmw$LL+df_lmw$BL
+p4 <- ggplot(df_lmw, aes(x = TTL, y = LTM)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()+
+  theme_classic() +
+  labs(x = "Lobe tip to mouth distance (mm)",
+      y = "Total length of the animal (mm)")
+p4
+
+#shape_nolog<-ggarrange(p1, p2, p3, p4, ncol = 2, nrow = 2)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/shape_nolog.svg",width=10, height=8, plot=shape_nolog)
+```
+### Piece wise regression
+
+```{r}
+library("segmented")
+
+df_clean <- na.omit(df_lmw[, c("BL", "TABW", "ALO","AW","LTM","LL","TTL")])
+model1 <- lm(TABW ~ BL, data = df_clean)
+model2 <- lm(AW ~ ALO, data = df_clean)
+model3 <- lm(LL ~ LTM, data = df_clean)
+model4 <- lm(LTM ~ TTL, data = df_clean)
+
+segmented_model1 <- segmented(model1, seg.Z = ~BL)
+segmented_model2 <- segmented(model2, seg.Z = ~ALO)
+segmented_model3 <- segmented(model3, seg.Z = ~LTM)
+segmented_model4 <- segmented(model4, seg.Z = ~TTL)
+
+df_clean$seg_preds1 <- predict(segmented_model1)
+df_clean$seg_preds2 <- predict(segmented_model2)
+df_clean$seg_preds3 <- predict(segmented_model3)
+df_clean$seg_preds4 <- predict(segmented_model4)
+
+pp1 <- ggplot(df_clean, aes(x = BL, y = TABW)) +
+  geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  labs(
+    title = "Piecewise Regression Fit",
+    x = "Body length (mm)",
+    y = "Body width (mm)"
+  ) +
+  theme_classic()
+
+
+pp2 <- ggplot(df_clean, aes(x = ALO, y = AW)) +
+  geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+  labs(
+    title = "Piecewise Regression Fit",
+    x = "Auricle length (mm)",
+    y = "Auricle width (mm)"
+  ) +
+  theme_classic()
+
+pp3 <- ggplot(df_clean, aes(x = LTM, y = LL)) +
+  geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
+  labs(
+    title = "Piecewise Regression Fit",
+    x = "Lobe tip to mouth distance (mm)",
+    y = "Lobe tip to the crux of lobe and auricle (mm)"
+  ) +
+  theme_classic()
+
+
+pp4 <- ggplot(df_clean, aes(x = TTL, y = LTM)) +
+  geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+  labs(
+    title = "Piecewise Regression Fit",
+    x = "Total body length (mm)",
+    y = "Lobe tip to mouth distance (mm)"
+  ) +
+  theme_classic()
+pp4
+shape_piecereg<-ggarrange(pp1, pp2, pp3, pp4, ncol = 2, nrow = 2)
+ggsave(file="D:/202603-dev-seq-analysis/fig/shape_piecereg.svg",width=10, height=8, plot=shape_piecereg)
+```
+
+
+
+
+## Standardization and then study allometric development
+
+
+### plot allometric dev
+
+Using body length as the x axis
+```{r}
+df_lm20 <- df_lm %>%
+  # Filter to only rows where temp is 20
+  filter(temp == 20) 
+
+df_BL <- df_lm %>%
+  # 1. Create a lookup of just the BL values
+  left_join(
+    df_lm20 %>% 
+      filter(measure_name == "BL") %>% 
+      dplyr::select(sample_id, ind, exp_day, bl_value = value, bl_log = log_value), 
+    by = c("sample_id","ind", "exp_day")
+  ) %>%
+  filter(!(measure_name %in% c("BL")))
+
+df_TABW <- df_lm %>%
+  # 1. Create a lookup of just the BL values
+  left_join(
+    df_lm20 %>% 
+      filter(measure_name == "TABW") %>% 
+      dplyr::select(sample_id, ind, exp_day, bw_value = value, bw_log = log_value), 
+    by = c("sample_id","ind", "exp_day")
+  ) %>%
+  filter(!(measure_name %in% c("TABW")))
+ # filter(!(measure_name %in% c("BL","PL","TABW")))
+
+```
+
+
+plot by individual
+
+plot all measurements together
+```{r}
+p <- ggplot(df_BL, aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  geom_point()
+
+
+p
+#ggsave("/Volumes/Yinghui/202512-dev-seq-analyses/fig/dev.svg", width=10, height=8)
+```
+
+```{r}
+measurement <- c("TABW", "TCL","TBL", "ALO", "AW", "LL")
+fig_total <- df_BL %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point(aes(alpha = 0.7))+
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic() +scale_color_manual(values = c("TABW" = "#343434", "TCL" = "#8FABB7", "TBL" = "#384F57", "ALO" = "#b8ac92", "AW" = "#9ba3a1", "LL"= "#3880ba"))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+fig_total
+
+#ggsave("/Volumes/Yinghui/202603-dev-seq-analysis/fig/dev.svg", fig_total,width=8, height=8)
+ggsave(file="D:/202603-dev-seq-analysis/fig/dev_multi_measurement.svg", plot=fig_total)
+
+
+```
+Add equation on the linear regression line on the plot
+```{r}
+p <- p + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p
+```
+
+```{r}
+df_BL20 <- df_BL %>%
+  filter(temp == 20)
+```
+Group the measurements so that the figure will be clearer.
+measurements on the aboral plane and related to the canals length
+```{r}
+measurement <- c("AEAC","ATAC")
+oa <- df_BL20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic() +scale_color_manual(values = c("AEAC" = "#787A7D", "ATAC" = "#393D3F"))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+oa
+```
+
+measurements of traits that always exist
+```{r}
+measurement <- c("TABW","TCL","TBL","PW")
+fig_total <- df_BL20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic() +scale_color_manual(values = c("TABW" = "#546A7B", "TCL" = "#8FABB7", "TBL" = "#384F57", "PW" = "#8DB2F9"))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+fig_total
+```
+
+measurements related to the lobes
+```{r}
+measurement <- c("LL","LTM")
+fig_lobe <- df_BL20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method="lm") +
+  theme_classic() +scale_color_manual(values = c("LL" = "#627F7F", "LTM" = "#94A29C"))+
+stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+fig_lobe
+```
+
+measurements related to the auricles
+```{r}
+measurement <- c("ALO","AW")
+fig_auricle <- df_BL20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +scale_color_manual(values = c("ALO" = "#C6C5B9", "AW" = "#A29F90")) + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+#fig_total
+fig_auricle
+```
+
+measurement related to ctene row length
+```{r}
+measurement <- c("ATCL","AECL")
+fig_cr <- df_BL20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bl_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +scale_color_manual(values = c("ATCL" = "#A3CEF1", "AECL" = "#CCCAC2")) + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+#fig_total
+fig_cr
+```
+
+
+### plot allometric dev by body width
+
+Using body width as the x axis
+```{r}
+df_TABW <- df_lm %>%
+  # 1. Create a lookup of just the BL values
+  left_join(
+    df_lm %>% 
+      filter(measure_name == "TABW") %>% 
+      dplyr::select(sample_id, exp_day, bw_value = value, bw_log = log_value), 
+    by = c("sample_id","exp_day")
+  ) %>%
+  filter(!(measure_name %in% c("BL")))
+ # filter(!(measure_name %in% c("BL","PL","TABW")))
+
+df_TABW20 <- df_TABW %>% filter(temp == 20)
+```
+plot by individual
+
+plot all measurements together
+```{r}
+p <- ggplot(df_TABW, aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  geom_point()
+
+
+p
+#ggsave("/Volumes/Yinghui/202512-dev-seq-analyses/fig/dev.svg", width=10, height=8)
+```
+
+Group the measurements so that the figure will be clearer.
+measurements on the aboral plane and related to the canals length
+```{r}
+measurement <- c("AEAC","ATAC")
+oa <- df_TABW %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic() +scale_color_manual(values = c("AEAC" = "#787A7D", "ATAC" = "#393D3F"))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+oa
+```
+
+measurements of traits that always exist
+```{r}
+measurement <- c("BL","TCL","TBL","PW")
+fig_total <- df_TABW %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic() +scale_color_manual(values = c("BL" = "#546A7B", "TCL" = "#8FABB7", "TBL" = "#384F57", "PW" = "#8DB2F9"))+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+fig_total
+```
+
+measurements related to the lobes
+```{r}
+measurement <- c("LL","LTM")
+fig_lobe <- df_TABW20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method="lm") +
+  theme_classic() +scale_color_manual(values = c("LL" = "#627F7F", "LTM" = "#94A29C"))+
+stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+fig_lobe
+```
+
+measurements related to the auricles
+```{r}
+measurement <- c("ALO","AW")
+fig_auricle <- df_TABW20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +scale_color_manual(values = c("ALO" = "#C6C5B9", "AW" = "#A29F90")) + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+#fig_total
+fig_auricle
+```
+
+measurement related to ctene row length
+```{r}
+measurement <- c("ATCL","AECL")
+fig_cr <- df_TABW20 %>%
+  filter(measure_name %in% measurement) %>% # Only keeps these three
+  ggplot(aes(x = bw_log, y = log_value, color = measure_name)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +scale_color_manual(values = c("ATCL" = "#A3CEF1", "AECL" = "#CCCAC2")) + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))+labs(
+    x = "Log of Body Length (mm)",
+    y = "Log of measurements (mm)",
+    color = "Measurement"  # Changes the legend title
+  )
+
+#fig_total
+fig_cr
+```
+
+####Plotting for the shape versus size LMM study
+
+```{r}
+df_lmw <- drop_na(df_lmw)
+df_lmw$centroid <- log(df_iso$centroid)
+df_long <- df_lmw %>% pivot_longer(
+    cols = "TBL":"TABW",           # The range of columns you want to collapse
+    names_to = "measurement",   # What to call the new column for the headers (TBL, PW, etc.)
+    values_to = "value"         # What to call the new column for the numbers
+  )
+
+measurement <- c("BL","TABW")
+p1 <-  df_long %>%# Only keeps these three
+  ggplot(aes(x = centroid, y = value, color = measurement)) +
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_classic() + stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+
+p1
+```
+```{r}
+p1 <-ggplot(df_lmw, aes(x = log(centroid), y = PL, colour = biorep)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the pharynx length (mm)") +
+    #scale_color_manual(values = c("#FBD1A2", "#00B2CA", "#F79256", "#7DCFB6","#224f73")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p4 <-ggplot(df_lmw, aes(x = log(centroid), y = TABW, colour = biorep)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the body width (mm)") +
+    #scale_color_manual(values = c("#FBD1A2", "#00B2CA", "#F79256", "#7DCFB6")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p2 <- ggplot(df_lmw, aes(x = log(centroid), y = LL, colour = biorep)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the lobe Width (mm)") +
+   # scale_color_manual(values = c("#FBD1A2", "#00B2CA", "#F79256", "#7DCFB6")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p3 <- ggplot(df_lmw, aes(x = log(centroid), y = AW, colour = biorep)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the auricle Length (mm)") +
+    #scale_color_manual(values = c("#FBD1A2", "#00B2CA", "#F79256", "#7DCFB6")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+
+p <- ggarrange(p1,p4, p2,p3, nrow = 2, ncol = 2,common.legend = TRUE)
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/p.svg", plot=p)
+ggsave(file="D:/202603-dev-seq-analysis/fig/p1.svg", plot=p)
+
+```
+
+#### With all variables:
+
+```{r}
+df_LA <- df_lmw[,5:18]
+
+measure_cols <- colnames(df_LA)
+
+df_iso <- df_lmw %>% 
+  ungroup() %>%
+  mutate(centroid = rowMeans(dplyr::select(., TBL:TABW), na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(across(all_of(measure_cols), 
+                ~ .x - centroid, 
+                .names = "shape_{.col}"))
+```
+
+
+```{r}
+model_LA = glm(formula = centroid ~ shape_TBL + shape_PW + shape_ATAC +shape_AEAC + shape_ALO+ shape_AW+ shape_WAE + shape_ATCL + shape_PL+ shape_BL+ shape_TCL + shape_LTM + shape_LL + shape_TABW, data = df_iso)
+plot(model_LA)
+summary(model_LA)
+```
+
+
+
+to assess the effect of allometry on shape variation:
+
+For LMM, we regressed the linear data against the natural logarithm of the geometric mean with the lm.rrpp function of the “RRPP” package (version 1.3.1) (Collyer & Adams, 2018). We considered both centroid size and geometric mean as proxies for size in the context of geometric and LMM. (Viacava 2023)
+
+
+## Clustering
+### GMM analysis
+
+Select variables that are most significant to the model
+
+First we look at the result obtained using the function Mclust from the mclust package,
+with the best model selected by BIC for clustering on all the variables, allowing all possible
+parameterizations and the number of groups
+
+```{r}
+# pivot wide the data, so that each measurement is in a separate column
+
+# not shape but log measurements
+
+df_lmw <- df_lm20 %>%
+  dplyr::select(-c(plane, value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = log_value
+  )
+
+```
+
+#### With all variables:
+
+```{r}
+# df_LA: with lobe and auricles
+df_LA <- df_lmw[,5:18]
+df_LA <- drop_na(df_LA)
+mod1 <- Mclust(df_LA,G=1:8)
+summary(mod1)
+```
+
+```{r}
+out1 <- clustvarsel(df_LA, G=4)
+out1
+```
+```{r}
+steps_data <- as.data.frame(out1$steps.info) %>%
+  mutate(
+    Step = row_number(),
+    # 'Variable' is usually the name of the column added/removed
+    Variable = rownames(out1$steps.info)
+  ) %>%
+  # We want to see how much the BIC improved at each step
+  rename(BIC_Change = 1)
+
+ggplot(steps_data, aes(x = reorder(Variable, Step), y = BIC_Change)) +
+  geom_segment(aes(xend = Variable, yend = 0), color = "skyblue") +
+  geom_point(aes(color = BIC_Change > 0), size = 4) +
+  coord_flip() +  # Flip it to read variable names easily
+  theme_minimal() +
+  scale_color_manual(values = c("red", "darkgreen"), labels = c("Rejection", "Selection")) +
+  labs(
+    title = "Clustvarsel: Variable Importance",
+    subtitle = "Variables ordered by their contribution to cluster separation",
+    x = "Measurement Variable",
+    y = "BIC Difference (Evidence Strength)",
+    color = "Decision"
+  )
+```
+Selected subset: ATAC, AW, ALO, LL, LTM, TCL, ATCL
+
+```{r}
+mod1_2 <-Mclust(df_LA[, out1$subset])
+summary(mod1_2)
+```
+
+```{r}
+
+#fviz_mclust(mod1_2,"classification",  geom = "point", palette = palette1)
+plot(mod1_2, what = "classification", colors = palette1)
+plot(mod1_2, what = "BIC", colors = palette1)
+```
+
+```{r}
+#palette1 <- sample(palette1)
+g1 <- fviz_mclust(mod1_2,"classification",  geom = "point", palette = palette1)
+g1
+svglite("D:/202603-dev-seq-analysis/fig/class1-bic.svg", width = 10, height = 10)
+
+plot(mod1_2, what = "classification", colors = palette1)
+dev.off()
+
+```
+
+```{r}
+#ggsave(file="D:/202603-dev-seq-analysis/fig/g1.svg", plot=g1, width = 5, height = 5)
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/GMM1.svg", plot=p1, width=5, height=5)
+```
+
+```{r}
+df_lmw_class <- drop_na(df_lmw)
+df_lmw_class$classification <- as.factor(mod1_2$classification)
+
+
+PCA2 <- prcomp(df_lmw_class[,5:18], scale. = FALSE)
+summary(PCA2)
+p <- fviz_pca_ind(PCA2, geom.ind = "point",
+             col.ind = df_lmw_class$classification, # color by groups
+             palette = c("#94A29C", "#8DB2B9", "#384F57","#546A7B"),
+             addEllipses = TRUE, ellipse.type = "convex",
+             legend.title = "Groups")
+
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/PCA1.svg", plot=p, width=5, height=5)
+
+```
+
+##### with iso (shape only)
+```{r}
+mod1_1 <- Mclust(df_iso[,19:33])
+summary(mod1_1)
+```
+
+#### With no auricle and lobe related measurements:
+```{r}
+# df_noLA: no lobe and auricles measurements
+df_noLA <- df_lmw[,!names(df_lmw) %in% c("ALO", "AW", "LL", "LTM", "sample_id", "temp", "ind", "biorep")]
+
+#examine their correlation
+m <- cor(df_noLA)
+# Convert matrix to data frame and reshape
+cor_df <- as.data.frame(m) 
+
+a <- which(cor_df>0.99, arr.ind=T)
+row.names(cor_df[a[,1],] )
+names(cor_df[a[,2]])  
+```
+
+```{r}
+mod2 <- Mclust(df_noLA)
+summary(mod2)
+```
+
+
+
+
+Selecting variable useful for clustering
+```{r}
+out2 <- clustvarsel(df_noLA)
+out2
+```
+
+
+Construct the clustering model again
+```{r}
+mod2_2 <-Mclust(df_noLA[, out2$subset])
+summary(mod2_2)
+```
+
+```{r}
+#palette1 <- sample(palette1)
+p3 <- fviz_mclust(mod2_2,"classification",  geom = "point", palette = palette1) +
+  scale_shape_manual(values = c(16,0,17)) +
+  scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee"))
+  
+p3
+svglite("/Volumes/Yinghui/202512-dev-seq-analyses/fig/class2.svg", width = 6, height = 6)
+plot(mod2_2, what = "classification", colors = palette1)
+dev.off()
+plot(mod2_2, what = "classification", colors = palette1)
+
+```
+
+```{r}
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/GMM2.svg", plot=p3, width=5, height=5)
+```
+
+overlap the classification back
+```{r}
+df_lmw$cluster <- as.factor(mod2_2$classification)
+
+p<-ggplot(df_lmw, aes(x = BL, y = TABW, color = cluster)) +
+  labs(x = "Log of body length (mm)",y = "log of body width (mm)")+
+  geom_point(size = 1) +
+  theme_classic() +
+  scale_shape_manual(values = c(16,0,17)) +
+  scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee"))
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/GM2_mapping.svg", plot=p, width=5, height=5)
+
+```
+
+### K-means
+for group w.o lobe or auricle
+```{r}
+km.res <- kmeans(df_noLA,5)
+print(km.res)
+```
+### PCA
+
+```{r}
+# creating a df that only have the measurements of the animal with lobe an auricle
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = log_value
+  )%>%
+  drop_na() %>% filter(temp!=20)
+
+#df_lmw <- na.omit(df_lmw)
+df_metadata <- df_lmw[, 1:5]
+measurements <- df_lmw[, 6:ncol(df_lmw)]
+  
+PCA2 <- prcomp(select_if(measurements, is.numeric), scale. = FALSE)
+summary(PCA2)
+fviz_pca_ind(PCA2)
+```
+
+```{r}
+fviz_contrib(PCA2, choice = "var", axes = 1, top = 10)
+```
+
+```{r}
+pca_img <- fviz_pca_ind(PCA2,
+             habillage = as.factor(df_metadata$temp), # Use Temp for grouping
+             geom = "point", 
+             addEllipses = TRUE,
+             title = "PCA of Biological Measurements")
+```
+```{r}
+p <-fviz_pca_var(PCA2,col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+#ggsave(file="D:/202603-dev-seq-analysis/fig/PCA.svg",width=8, height=6, plot=p)
+
+```
+
+PCA not including the lobe and auricle
+```{r}
+df_noLA <- df_lm %>%
+  dplyr::select(-c(plane, value)) %>% dplyr::filter(!(measure_name%in% c("LL", "LTM", "ALO","AW")))%>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = log_value
+  )%>%
+  drop_na() %>% filter(temp!=20) 
+
+df_metadata <- df_noLA[, 1:6]
+measurements <- df_noLA[, 7:ncol(df_noLA)]
+  
+PCA2 <- prcomp(select_if(measurements, is.numeric), scale. = FALSE)
+summary(PCA2)
+fviz_pca_ind(PCA2)
+
+fviz_pca_var(PCA2,col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+
+fviz_contrib(PCA2, choice = "var", axes = 1, top = 10)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/PCA.svg",width=8, height=6, plot=p)
+
+```
+
+
+### LMM
+removing the measurement related to lobe and auricle
+(LL, LTM, ALO, AW)
+```{r}
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = log_value
+  )
+
+df_LA <- df_lmw %>% dplyr::select(-LL, -LTM, -ALO, -AW)
+measure_cols <- colnames(df_LA[,6:17])
+
+#df_lmw <- drop_na(df_lmw)
+
+df_iso <- df_LA %>% 
+  ungroup() %>%
+  mutate(
+    # Remove the inner log() function
+    #mutate(centroid = exp(rowMeans(log(select(., TBL:TATB))))) 
+    centroid = exp(rowMeans(pick(TBL:TATB), na.rm = TRUE))
+  )
+df_iso <-  df_iso  %>%  ungroup() %>%
+  mutate(across(all_of(measure_cols), 
+                ~ .x - centroid, 
+                .names = "shape_{.col}"))
+```
+
+```{r}
+library(lme4)
+library(lmerTest)
+mmod <- lmer(centroid ~ exp_day * factor(temp) + (1 | sample_id), df_iso)
+summary(mmod)
+```
+```{r}
+# Ensure temp is a factor so ggplot treats it as two distinct groups
+df_iso$temp_factor <- factor(df_iso$temp)
+
+p_temp <- ggplot(df_iso, aes(x = exp_day, y = centroid, color = temp_factor)) +
+  # 1. Add the raw data points (set alpha to see overlaps)
+  geom_line(aes(group = sample_id), alpha = 0.5, size = 0.8) +
+  
+  # 2. Add the linear regression lines
+  # method = "lm" matches your Linear Mixed Model logic
+  geom_smooth(method = "lm", se = TRUE, size = 1.2) +
+  
+  # 3. Refine labels and theme
+  labs(
+    title = "Centroid growth rate by temperature",
+    x = "Days after Hatching",
+    y = "Centroid",
+    color = "Temperature (°C)"
+  ) +
+  theme_minimal(base_size = 12) +
+  scale_color_manual(values = c("18" = "#F8766D", "20" = "#00BFC4"))
+
+#ggsave("/Volumes/Yinghui/202603-dev-seq-analysis/fig/p_temp.svg", p_temp, width=8, height=8)
+```
+
+```{r}
+# 1. Predict only the Fixed Effects
+df_iso$fitted_lmm <- predict(mmod, re.form = NA)
+
+# 2. Sort the data by the X-axis to ensure the line is smooth
+df_iso <- df_iso[order(df_iso$exp_day), ]
+
+# 2. Plot
+p <- ggplot(df_iso, aes(x = exp_day, y = centroid, color = temp)) +
+  # Plot the raw data points (jittered as in your example)
+  geom_jitter(alpha = 0.7, width = 0.2) +
+  
+  # Plot the model predictions (the lines)
+  # We use the 'fitted_lmm' column instead of geom_smooth
+  geom_line(aes(y = fitted_lmm), linewidth = 1.2) +
+  
+  scale_color_manual(values = c("#3880ba", "#a3d977")) +
+  labs(
+    title = "",
+    x = "Day after hatching",
+    y = "Centroid size (mm)"
+  ) + theme_classic2()
+```
+
+```{r}
+#ggsave(file="D:/202603-dev-seq-analysis/fig/compare_temp.svg",width=8, height=6, plot=p)
+```
+
+```{r}
+df_LA <- df_lm %>% dplyr::filter(measure_name%in% c("LL", "LTM", "ALO","AW"))
+p2 <- ggplot(df_LA, aes(x = exp_day, y = log_value, color = temp)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm",se = FALSE) + # Adds a growth trend line for each measurement
+  labs(title = "Growth by Measurement Type",
+       x = "Day After Hatching",
+       y = "Log of measurements",
+       color = "Temperature") +
+  theme_classic2()+
+  
+  scale_color_manual(values = c("#3880ba", "#a3d977"))
+
+
+```
+
+```{r}
+
+df_BL <- df_lm %>%
+  # 1. Create a lookup of just the BL values
+  left_join(
+    df_lm %>% 
+      filter(measure_name == "BL") %>% 
+      dplyr::select(sample_id, biorep, temp, ind, exp_day,bl_value = value, bl_log = log_value), 
+    by = c("sample_id","biorep","temp","ind","exp_day")
+  ) %>%
+  filter(!(measure_name %in% c("BL")))
+
+```
+
+```{r}
+df_LA <- df_BL %>% dplyr::filter(measure_name%in% c("LL", "LTM", "ALO","AW"))
+p3 <- ggplot(df_LA, aes(x = bl_log, y = log_value, color = temp)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm",se = FALSE) + # Adds a growth trend line for each measurement
+  labs(title = "Growth by Measurement Type",
+       x = "Log of body length (mm)",
+       y = "Log of measurements",
+       color = "Temperature") +
+  theme_classic2()+
+  
+  scale_color_manual(values = c("#3880ba", "#a3d977"))
+```
+
+```{r}
+p <- ggarrange(p2,p3, nrow = 2, ncol = 1,common.legend = TRUE)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/compare_temp_n_size.svg",width=6, height=6, plot=p)
+```

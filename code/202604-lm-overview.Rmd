@@ -1,0 +1,280 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+
+# Import data file
+
+Dir:"/Volumes/Yinghui/202512-dev-seq-analyses"
+
+```{r}
+# df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+#files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+#linear measurements
+```{r}
+measurement_accumulator <- list()
+
+for (id in names(specs_list)) {
+  
+  # 1. Extract components correctly
+  spec   <- specs_list[[id]]
+  mat    <- spec$matrix
+  plane  <- spec$metadata$plane
+  ind    <- spec$metadata$ind
+  temp <- spec$metadata$temp
+  biorep <- spec$metadata$biorep
+  file <- spec$metadata$file
+  measurer <- spec$metadata$measurer
+  
+ # print(file)
+  # 2. Initialize a placeholder for this specific iteration's results
+  res <- tibble()
+  
+ # print(file)
+  # 3. Apply custom "Design" logic
+  if (plane == "PA") {
+    res <- tibble(
+      measure_name = c("ALO", "AW", "WAE", "ATCL", "PABW"),
+      value = c(ALO_fun(mat), AW_fun(mat), WAE_fun(mat), ATCL_fun(mat), PABW_fun(mat))
+    )
+    
+  } else if (plane == "TA") {
+    res <- tibble(
+      measure_name = c("PL", "BL", "TCL", "LTM", "LL", "TABW", "AECL","TATB"),
+      value = c(PL_fun(mat), BL_fun(mat), TCL_fun(mat), LTM_fun(mat), 
+                LL_fun(mat), TABW_fun(mat), AECL_fun(mat), TATB_fun(mat))
+    )
+    
+  } else if (plane == "OA") {
+    res <- tibble(
+      measure_name = c("TBL", "PW", "ATAC", "AEAC"),
+      value = c(TBL_fun(mat), PW_fun(mat), ATAC_fun(mat), AEAC_fun(mat))
+    )
+  }
+  
+  # print(file)
+  # print(row(mat))
+  # print(file)
+  # 4. Add metadata and store in accumulator
+  # Only add if we actually generated results
+  if (nrow(res) > 0) {
+    measurement_accumulator[[id]] <- res %>%
+      mutate(
+        measurer = measurer,
+        sample_id = str_extract(basename(file), "^\\d+"),
+        ind = ind,
+        plane = plane,
+        temp = temp,
+        biorep = biorep
+      )
+  }
+}
+# 5. Bind into one large dataframe
+df_lm <- bind_rows(measurement_accumulator)
+
+df_lm <- df_lm %>% mutate(
+    # Convert from microns (or current unit) to mm
+    value = value / 1000
+  ) 
+```
+
+Removing the value of lobate and auricle when those structures are not present
+standard:
+ALO 0.07mm
+AW 0.07mm
+LTM 0.07mm
+LL 0.07mm
+```{r}
+threshold <- 0.07
+
+df_lm <- df_lm %>% mutate(across(
+    c(value), 
+    ~ if_else(measure_name %in% c("ALO", "AW", "LTM", "LL") & .x < threshold, NA_real_, .x)
+  ))
+  
+```
+
+convert the sample_id to date
+```{r}
+df_lm <- df_lm %>%
+  mutate(date_obj = parse_date_time(paste0(sample_id, "2026"), orders = "mdy")) %>%
+  group_by(biorep) %>%
+  mutate(exp_day = as.numeric(difftime(date_obj, min(date_obj), units = "days"))) %>%
+  ungroup() %>%
+  dplyr::select(-c(date_obj))
+```
+change the sample id to individual
+```{r}
+df_lm <- df_lm  %>%
+  mutate(sample_id = paste(ind, temp, biorep, sep = "-"))
+```
+
+## allometric dev visualisation
+
+### obtain the natural log of the value
+Common practice when studying allometric development because it is easier to deal with proportional variation.
+
+```{r}
+#create a new column with log value
+df_lm <- df_lm %>% mutate(log_value = log(value))
+```
+
+###Plotting for the shape versus size LMM study
+
+centroid size is recalculated as a Solid semi-ellipsoid around z-axis (without lobe)
+
+volume: (2*pi*a*b*c)/3
+
+a, b = TABW/2, PABW/2, the principal semi-axes of the base ellipse
+c = BL,the principal z-semi-axe from the center of base ellipse
+
+```{r}
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, log_value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = value
+  ) 
+
+df_lmw <- df_lmw %>% 
+  mutate(centroid = (2 *(TABW/2) * (PABW/2)*BL )/3)
+
+
+measure_cols <- colnames(df_lmw[,6:22])
+df_iso <-  df_lmw  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/centroid), 
+                .names = "shape_{.col}"))
+
+```
+
+
+```{r}
+p1 <-ggplot(df_lmw, aes(x = log(centroid), y = log(TBL), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the tentacle bulb length (mm)") +
+    scale_color_manual(values = c( "#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p4 <-ggplot(df_lmw, aes(x = log(centroid), y = log(TABW), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the body width (mm)") +
+    scale_color_manual(values = c( "#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p2 <- ggplot(df_lmw, aes(x = log(centroid), y = log(LL), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the lobe side length (mm)") +
+    scale_color_manual(values = c("#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p3 <- ggplot(df_lmw, aes(x = log(centroid), y = log(ALO), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the auricle length (mm)") +
+    scale_color_manual(values = c("#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+
+p <- ggarrange(p1,p4, p2,p3, nrow = 2, ncol = 2,common.legend = TRUE)
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/p.svg", plot=p)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/p1.svg", plot=p)
+
+```
+
+#### With all variables:
+
+```{r}
+measure_cols <- colnames(df_lmw[,6:22])
+df_iso <-  df_lmw  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/centroid), 
+                .names = "shape_{.col}"))
+```
+
+
+```{r}
+tbl_values <- df_lm$value[df_lm$measure_name == "TBL"]
+boxplot(as.numeric(tbl_values))
+
+```

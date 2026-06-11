@@ -1,0 +1,163 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+Import the dataframe created in the load_dataframe.rmd
+```{r}
+df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
+df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
+df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+```
+
+```{r}
+ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
+geom_point(size = 1) +
+theme_classic()
+```
+## similarity and association of the measurements BL, PL, PABW, TABW
+```{r}
+df_NoLA %>%
+  # 1. Reshape the data to long format
+  pivot_longer(
+    cols = c(BL, PL, PABW, TABW), 
+    names_to = "Measurement", 
+    values_to = "Value"
+  ) %>%
+  # 2. Plot the data
+  ggplot(aes(x = exp_day, y = Value, color = Measurement, fill = Measurement)) +
+  
+  # Scatter plot points
+  geom_point(size = 1, alpha = 0.5) +
+  
+  # Trend lines (method = "lm" for linear, or leave blank for a smooth LOESS curve)
+  geom_smooth(method = "glm", alpha = 0.1, size = 1) + 
+  
+  # Your custom color palette (applies to points and lines)
+  scale_color_manual(values = c(
+    "BL" = "#343434", 
+    "PL"  = "#8FABB7", 
+    "PABW"  = "#3880ba", 
+    "TABW"  = "#b8ac92"
+  )) +
+  
+  # Custom fill palette (applies to the geom_smooth error shading)
+  scale_fill_manual(values = c(
+    "BL" = "#343434", 
+    "PL"  = "#8FABB7", 
+    "PABW"  = "#3880ba", 
+    "TABW"  = "#b8ac92"
+  )) +
+  
+  labs(
+    title = "Measurement Trends Over Time",
+    x = "Experimental Day",
+    y = "Value"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+library(segmented)
+measure_cols <- colnames(df_NoLA[,7:20])
+df_NoLA_sg <- df_NoLA %>%
+  mutate(
+    across(all_of(measure_cols), 
+                ~ log(.x), 
+                .names = "log_{.col}")
+  )%>%
+  mutate(log_centroid = log(centroid))
+
+model1 <- lm(log_TBL ~ log_centroid, data = df_NoLA_sg)
+
+segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+
+df_NoLA_sg$seg_preds1 <- predict(segmented_model1)
+
+pp1 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TBL, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() +
+    labs(y = "Log TBL")
+
+pp2 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TBL, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() +
+    labs(y = "Log TBL")
+```
+
+```{r}
+model2 <- lm(log_ATAC ~ log_AEAC, data = df_NoLA_sg)
+
+segmented_model2 <- segmented(model2, seg.Z = ~log_AEAC)
+
+df_NoLA_sg$seg_preds2 <- predict(segmented_model2)
+
+pp3 <- ggplot(df_NoLA_sg, aes(x = log_AEAC, y = log_ATAC, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() 
+
+pp4 <- ggplot(df_NoLA_sg, aes(x = log_AEAC, y = log_ATAC, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() 
+
+ggarrange(pp1,pp2, pp3,pp4,ncol = 2, nrow = 2)
+```
+
+```{r}
+model3 <- lm(log_TCL ~ log_centroid, data = df_NoLA_sg)
+
+segmented_model3 <- segmented(model3, seg.Z = ~log_centroid)
+
+df_NoLA_sg$seg_preds3 <- predict(segmented_model3)
+
+pp5 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TCL, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic()
+
+pp6 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TCL, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() 
+```
+
+
+```

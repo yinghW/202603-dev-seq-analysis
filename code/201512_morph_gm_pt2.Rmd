@@ -1,0 +1,286 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+
+# Import data file
+
+
+```{r}
+# df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+#files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+Make sure the landmarks used is the same as the df_iso
+```{r}
+df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+```
+
+```{r}
+df <- df %>%
+  mutate(
+    date_string = str_extract(basename(file), "^\\d{4}"),
+    date_obj = ymd(paste0("2025", date_string))
+  ) %>%
+  select(-date_string)
+```
+
+```{r}
+df_matched <- inner_join(
+  df, 
+  df_NoLA, 
+  by = c("date_obj", "temp", "ind","biorep")
+)
+```
+
+```{r}
+# convert the lm to matrix for each file.
+specs_list <- df_matched %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# GM
+
+## OA
+```{r}
+oa_idx <- sapply(specs_list, function(x) {
+  x$metadata$plane == "OA"
+})
+
+# Filter the list to keep only those specimens
+oa_list <- specs_list[oa_idx]
+
+# Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+oa_m <- lapply(oa_list, function(x) x$matrix)
+
+# Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+oa_3d_array <- simplify2array(oa_m)
+
+# (Optional) Assign specimen names to the 3rd dimension for tracking
+# dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(oa_3d_array)
+```
+### GPA
+```{r}
+gpaOA <- gpagen(oa_3d_array)
+plotAllSpecimens(gpaOA$coords)
+```
+
+```{r}
+PCA_OA <- gm.prcomp(gpaOA$coords)
+plot(PCA_OA)
+```
+CVA
+
+```{r}
+library(Morpho)
+CVA_stage=CVA(gpaOA$coords, df_NoLA$stage, weighting = TRUE,
+	plot = TRUE, rounds = 1000, cv = TRUE)
+CVA_stage
+stage <- as.factor(df_NoLA$stage)
+plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
+     col = stage,
+     xlab = "CV1", ylab = "CV2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+
+```
+between-group PCA
+```{r}
+bwgPCA_stage=groupPCA(gpaOA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
+plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+
+```{r}
+bwgPCA_stage$groupdists
+bwgPCA_stage$probs
+```
+
+Allometric analysis
+```{r}
+ShapeANDsize <- cbind(gpaOA$coords, log(gpaOA$Csize))
+PCASizeShape <- prcomp(ShapeANDsize)
+
+plot(PCASizeShape$x[,1],PCASizeShape$x[,2],
+     col= stage,
+     xlab="RW in size-shape space 1",ylab="RW in size-shape space 2",asp = 1)
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+
+```
+
+Use a linear model to conduct MANOVA
+
+```{r}
+#oa_shape <- gpaOA$coords
+#oa_size <- log(gpaOA$Csize)
+# can refer back to lm part 3
+#ShapeOnSize <- lm(oa_shape ~ oa_size)
+#summary(manova(ShapeOnSize))
+```
+
+
+## TA
+```{r}
+ta_idx <- sapply(specs_list, function(x) {
+  x$metadata$plane == "TA"
+})
+
+# Filter the list to keep only those specimens
+ta_list <- specs_list[ta_idx]
+
+# Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+ta_m <- lapply(ta_list, function(x) x$matrix)
+
+# Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+ta_3d_array <- simplify2array(ta_m)
+
+# (Optional) Assign specimen names to the 3rd dimension for tracking
+# dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(ta_3d_array)
+```
+
+### GPA
+```{r}
+gpaTA <- gpagen(ta_3d_array)
+plotAllSpecimens(gpaTA$coords)
+```
+
+```{r}
+CVA_stage=CVA(gpaTA$coords, df_NoLA$stage, weighting = TRUE,
+	plot = TRUE, rounds = 1000, cv = TRUE)
+CVA_stage
+stage <- as.factor(df_NoLA$stage)
+plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
+     col = stage,
+     xlab = "CV1", ylab = "CV2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+
+
+
+```{r}
+PCA_TA <- gm.prcomp(gpaTA$coords)
+plot(PCA_TA)
+```
+
+## between-group PCA
+```{r}
+bwgPCA_stage=groupPCA(gpaTA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
+plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+
+Allometric analysis
+```{r}
+ShapeANDsize <- cbind(gpaTA$coords, log(gpaTA$Csize))
+PCASizeShape <- prcomp(ShapeANDsize)
+
+plot(PCASizeShape$x[,1],PCASizeShape$x[,2],
+     col= stage,
+     xlab="RW in size-shape space 1",ylab="RW in size-shape space 2",asp = 1)
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+
+```
+## PA
+```{r}
+pa_idx <- sapply(specs_list, function(x) {
+  x$metadata$plane == "PA"
+})
+
+# Filter the list to keep only those specimens
+pa_list <- specs_list[pa_idx]
+
+# Extract just the 'matrix' part from every list element
+# This creates a list of 2D matrices
+pa_m <- lapply(pa_list, function(x) x$matrix)
+
+# Combine them into a 3D Array
+# Dimensions will be [Landmarks, Coordinates, Specimens]
+# In your case: [8, 2, n]
+pa_3d_array <- simplify2array(pa_m)
+
+# (Optional) Assign specimen names to the 3rd dimension for tracking
+# dimnames(oa_3d_array)[[3]] <- names(format_filtered)
+
+# Check the final structure
+dim(pa_3d_array)
+```
+
+### GPA
+```{r}
+gpaPA <- gpagen(pa_3d_array)
+plotAllSpecimens(gpaPA$coords)
+```
+### LDA
+
+```{r}
+CVA_stage=CVA(gpaPA$coords, df_NoLA$stage, weighting = TRUE,
+	plot = TRUE, rounds = 1000, cv = TRUE)
+CVA_stage
+stage <- as.factor(df_NoLA$stage)
+plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
+     col = stage,
+     xlab = "CV1", ylab = "CV2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+### between-group PCA
+```{r}
+bwgPCA_stage=groupPCA(gpaTA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
+plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```

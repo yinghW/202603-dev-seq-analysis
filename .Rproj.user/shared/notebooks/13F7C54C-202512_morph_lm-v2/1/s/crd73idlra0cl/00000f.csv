@@ -1,2 +1,0 @@
-"0","#create a new column with log value"
-"0","df_lm <- df_lm %>% mutate(log_value = log(value))"

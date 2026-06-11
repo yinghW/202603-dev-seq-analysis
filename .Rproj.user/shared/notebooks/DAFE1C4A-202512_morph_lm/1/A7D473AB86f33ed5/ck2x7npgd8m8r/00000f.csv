@@ -1,2 +1,0 @@
-"0","model_LA = glm(formula = centroid ~ shape_TBL + shape_PW + shape_ATAC +shape_AEAC + shape_ALO+ shape_AW+ shape_WAE + shape_ATCL + shape_PL+ shape_BL+ shape_TCL + shape_LTM + shape_LL + shape_TABW, data = df_iso)"
-"0","plot(model_LA)"

@@ -1,0 +1,532 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+
+# Import data file
+
+Dir:"/Volumes/Yinghui/202512-dev-seq-analyses"
+
+```{r}
+# df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+```
+
+#linear measurements
+```{r}
+measurement_accumulator <- list()
+
+for (id in names(specs_list)) {
+  
+  # 1. Extract components correctly
+  spec   <- specs_list[[id]]
+  mat    <- spec$matrix
+  plane  <- spec$metadata$plane
+  ind    <- spec$metadata$ind
+  temp <- spec$metadata$temp
+  biorep <- spec$metadata$biorep
+  file <- spec$metadata$file
+  measurer <- spec$metadata$measurer
+  
+ # print(file)
+  # 2. Initialize a placeholder for this specific iteration's results
+  res <- tibble()
+  
+ # print(file)
+  # 3. Apply custom "Design" logic
+  if (plane == "PA") {
+    res <- tibble(
+      measure_name = c("ALO", "AW", "WAE", "ATCL", "PABW"),
+      value = c(ALO_fun(mat), AW_fun(mat), WAE_fun(mat), ATCL_fun(mat), PABW_fun(mat))
+    )
+    
+  } else if (plane == "TA") {
+    res <- tibble(
+      measure_name = c("PL", "BL", "TCL", "LTM", "LL", "TABW", "AECL","TATB"),
+      value = c(PL_fun(mat), BL_fun(mat), TCL_fun(mat), LTM_fun(mat), 
+                LL_fun(mat), TABW_fun(mat), AECL_fun(mat), TATB_fun(mat))
+    )
+    
+  } else if (plane == "OA") {
+    res <- tibble(
+      measure_name = c("TBL", "PW", "ATAC", "AEAC"),
+      value = c(TBL_fun(mat), PW_fun(mat), ATAC_fun(mat), AEAC_fun(mat))
+    )
+  }
+  
+  # print(file)
+  # print(row(mat))
+  # print(file)
+  # 4. Add metadata and store in accumulator
+  # Only add if we actually generated results
+  if (nrow(res) > 0) {
+    measurement_accumulator[[id]] <- res %>%
+      mutate(
+        measurer = measurer,
+        sample_id = str_extract(basename(file), "^\\d+"),
+        ind = ind,
+        plane = plane,
+        temp = temp,
+        biorep = biorep
+      )
+  }
+}
+# 5. Bind into one large dataframe
+df_lm <- bind_rows(measurement_accumulator)
+
+df_lm <- df_lm %>% mutate(
+    # Convert from microns (or current unit) to mm
+    value = value / 1000
+  ) 
+```
+
+Removing the value of lobate and auricle when those structures are not present
+standard:
+ALO 0.07mm
+AW 0.07mm
+LTM 0.07mm
+LL 0.07mm
+```{r}
+threshold <- 0.07
+
+df_lm <- df_lm %>% mutate(across(
+    c(value), 
+    ~ if_else(measure_name %in% c("ALO", "AW", "LTM", "LL") & .x < threshold, NA_real_, .x)
+  ))
+  
+```
+
+convert the sample_id to date
+```{r}
+# Your sample data
+date_strings <- df_lm$sample_id
+
+# 1. Convert to Date objects (assuming the year 2026)
+# We use parse_date_time to handle the MMDD format
+dates <- parse_date_time(paste0(date_strings, "2026"), orders = "mdy")
+
+# 2. Define your starting date (the first date in your list)
+start_date <- dates[1]
+
+# 3. Calculate days elapsed
+days_diff <- as.numeric(difftime(dates, start_date, units = "days"))
+
+# Results
+df <- data.frame(
+  Original = date_strings,
+  Formatted_Date = dates,
+  Days_Since_Start = days_diff
+)
+
+df_lm$exp_day <- df$Days_Since_Start
+```
+change the sample id to individual
+```{r}
+df_lm <- df_lm  %>%
+  mutate(sample_id = paste(ind, temp, biorep, sep = "-"))
+```
+
+## allometric dev visualisation
+
+### obtain the natural log of the value
+Common practice when studying allometric development because it is easier to deal with proportional variation.
+
+```{r}
+#create a new column with log value
+df_lm <- df_lm %>% mutate(log_value = log(value))
+```
+
+
+
+### plot allometric dev
+
+Using body length as the x axis
+only focusing on the 20C group
+```{r}
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, log_value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = value
+  ) 
+
+```
+plot by individual
+
+## plot all measurements together on body length
+```{r}
+p1 <- ggplot(df_lmw, aes(x = log(BL), y = log(TABW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p1
+
+p2 <- ggplot(df_lmw, aes(x = BL, y = AW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point(aes(color = sample_id))+
+  theme(legend.position = "none")
+p2
+
+p3 <- ggplot(df_lmw, aes(x = log(BL), y = log(PABW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p3
+
+p4 <- ggplot(df_lmw, aes(x = log(BL), y = log(AEAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p4
+
+p5 <- ggplot(df_lmw, aes(x = log(BL), y = log(AECL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p5
+
+p6 <- ggplot(df_lmw, aes(x = log(BL), y = log(ATAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p6
+p7 <- ggplot(df_lmw, aes(x = log(BL), y = log(ATCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p7
+
+p8 <- ggplot(df_lmw, aes(x = log(BL), y = log(LL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p8
+
+p9 <- ggplot(df_lmw, aes(x = log(BL), y = log(LTM))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p9
+
+p10 <- ggplot(df_lmw, aes(x = log(BL), y = log(PL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p10
+
+p11 <- ggplot(df_lmw, aes(x = log(BL), y = log(PW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p11
+
+p12 <- ggplot(df_lmw, aes(x = log(BL), y = log(TATB))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p12
+
+p13 <- ggplot(df_lmw, aes(x = log(BL), y = log(TBL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p13
+
+p14 <- ggplot(df_lmw, aes(x = log(BL), y = log(TCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p14
+
+```
+
+## plot all measurements together on body width
+```{r}
+p1 <- ggplot(df_lmw, aes(x = log(TABW), y = log(BL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p1
+
+p2 <- ggplot(df_lmw, aes(x = log(TABW), y = log(AW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p2
+
+p3 <- ggplot(df_lmw, aes(x = log(TABW), y = log(PABW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p3
+
+p4 <- ggplot(df_lmw, aes(x = log(TABW), y = log(AEAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p4
+
+p5 <- ggplot(df_lmw, aes(x = log(TABW), y = log(AECL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p5
+
+p6 <- ggplot(df_lmw, aes(x = log(TABW), y = log(ATAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p6
+p7 <- ggplot(df_lmw, aes(x = log(TABW), y = log(ATCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p7
+
+p8 <- ggplot(df_lmw, aes(x = log(TABW), y = log(LL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p8
+
+p9 <- ggplot(df_lmw, aes(x = log(TABW), y = log(LTM))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p9
+
+p10 <- ggplot(df_lmw, aes(x = log(TABW), y = log(PL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p10
+
+p11 <- ggplot(df_lmw, aes(x = log(TABW), y = log(PW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p11
+
+p12 <- ggplot(df_lmw, aes(x = log(TABW), y = log(TATB))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p12
+
+p13 <- ggplot(df_lmw, aes(x = log(TABW), y = log(TBL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p13
+
+p14 <- ggplot(df_lmw, aes(x = log(TABW), y = log(TCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p14
+
+```
+## plot all measurements together on centroid
+
+```{r}
+df_lmw <- df_lmw %>% 
+  mutate(centroid = (2 *(TABW/2) * (PABW/2)*BL )/3)
+
+
+measure_cols <- colnames(df_lmw[,6:22])
+df_iso <-  df_lmw  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/centroid), 
+                .names = "shape_{.col}"))
+```
+
+```{r}
+p1 <- ggplot(df_iso, aes(x = log(centroid), y = log(BL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p1
+
+p2 <- ggplot(df_iso, aes(x = log(centroid), y = log(AW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p2
+
+p3 <- ggplot(df_iso, aes(x = log(centroid), y = log(PABW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p3
+
+p4 <- ggplot(df_lmw, aes(x = log(centroid), y = log(AEAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p4
+
+p5 <- ggplot(df_lmw, aes(x = log(centroid), y = log(AECL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p5
+
+p6 <- ggplot(df_lmw, aes(x = log(centroid), y = log(ATAC))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p6
+p7 <- ggplot(df_lmw, aes(x = log(centroid), y = log(ATCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p7
+
+p8 <- ggplot(df_lmw, aes(x = log(centroid), y = log(LL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p8
+
+p9 <- ggplot(df_lmw, aes(x = log(centroid), y = log(LTM))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p9
+
+p10 <- ggplot(df_lmw, aes(x = log(centroid), y = log(PL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p10
+
+p11 <- ggplot(df_lmw, aes(x = log(centroid), y = log(PW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p11
+
+p12 <- ggplot(df_lmw, aes(x = log(centroid), y = log(TATB))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p12
+
+p13 <- ggplot(df_lmw, aes(x = log(centroid), y = log(TBL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p13
+
+p14 <- ggplot(df_lmw, aes(x = log(centroid), y = log(TCL))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p14
+
+p15 <- ggplot(df_iso, aes(x = log(centroid), y = log(TABW))) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p15
+
+```
+
+```{r}
+p1 <- ggplot(df_iso, aes(x = log(centroid), y = shape_BL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p1
+
+p2 <- ggplot(df_iso, aes(x = log(centroid), y = shape_AW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p2
+
+p3 <- ggplot(df_iso, aes(x = log(centroid), y = shape_PABW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p3
+
+p4 <- ggplot(df_iso, aes(x = log(centroid), y = shape_AEAC)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p4
+
+p5 <- ggplot(df_iso, aes(x = log(centroid), y = shape_AECL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p5
+
+p6 <- ggplot(df_iso, aes(x = log(centroid), y = shape_ATAC)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p6
+p7 <- ggplot(df_iso, aes(x = log(centroid), y = shape_ATCL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p7
+
+p8 <- ggplot(df_iso, aes(x = log(centroid), y = shape_LL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p8
+
+p9 <- ggplot(df_iso, aes(x = log(centroid), y = shape_LTM)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p9
+
+p10 <- ggplot(df_iso, aes(x = log(centroid), y = shape_PL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p10
+
+p11 <- ggplot(df_iso, aes(x = log(centroid), y = shape_PW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p11
+
+p12 <- ggplot(df_iso, aes(x = log(centroid), y = shape_TATB)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p12
+
+p13 <- ggplot(df_iso, aes(x = log(centroid), y = shape_TBL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p13
+
+p14 <- ggplot(df_iso, aes(x = log(centroid), y = shape_TCL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p14
+
+p15 <- ggplot(df_iso, aes(x = log(centroid), y = shape_TABW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point()
+p15
+
+```

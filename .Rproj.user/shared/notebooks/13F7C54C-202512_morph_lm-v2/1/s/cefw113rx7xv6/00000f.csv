@@ -1,7 +1,0 @@
-"0","df_lmw <- df_lm %>%"
-"0","  select(-c(plane, value)) %>%"
-"0","  group_by(sample_id, ind) %>%"
-"0","  pivot_wider("
-"0","    names_from = measure_name,"
-"0","    values_from = log_value"
-"0","  )"

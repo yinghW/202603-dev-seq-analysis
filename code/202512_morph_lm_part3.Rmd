@@ -1,0 +1,665 @@
+---
+title: "202512_morph_lm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
+
+source("data_import.R")
+source("PA_measurement.R")
+source("TA_measurement.R")
+source("OA_measurement.R")
+```
+
+```{r}
+library("geomorph")
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(mclust)
+library(ggpubr)
+library(svglite)
+```
+
+
+# Import data file
+
+Dir:"/Volumes/Yinghui/202512-dev-seq-analyses"
+
+```{r}
+# df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+#df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
+
+#files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+
+df <- lapply(files, readRDS) %>% bind_rows()
+```
+
+
+
+```{r}
+# convert the lm to matrix for each file.
+
+specs_list <- df %>%
+  group_by(temp, biorep, ind, plane, file) %>%
+  group_map(~ {
+    id <- .y$file
+    # Create a sub-list for this specific identifier
+    spec <- list(
+      matrix = as.matrix(.x[, c("X", "Y")]),
+      metadata = as.list(.y)
+    )
+    
+    setNames(list(spec), id)
+  }) %>%
+  flatten()
+
+```
+
+```{r}
+# add lm 13 in the TA plane
+specs_list<-add_lm13(specs_list)
+```
+
+
+# Plot setting
+```{r}
+palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D72","#ede7da")
+palette2 = c("#f1eef6","#d0d1e6","#a6bddb","#74a9cf","#3690c0",
+"#0570b0","#034e7b")
+palette3 = c("#E8F0F8FF", "#D8D8E8FF", "#C0C0D0FF", "#70B0E8FF", "#6088C0FF", "#406898FF", "#283858FF", "#000000FF", "#A8B0C0FF", "#808090FF", "#A8D0F8FF", "#802008FF")
+```
+
+#linear measurements
+```{r}
+measurement_accumulator <- list()
+
+for (id in names(specs_list)) {
+  
+  # 1. Extract components correctly
+  spec   <- specs_list[[id]]
+  mat    <- spec$matrix
+  plane  <- spec$metadata$plane
+  ind    <- spec$metadata$ind
+  temp <- spec$metadata$temp
+  biorep <- spec$metadata$biorep
+  file <- spec$metadata$file
+  measurer <- spec$metadata$measurer
+  
+ # print(file)
+  # 2. Initialize a placeholder for this specific iteration's results
+  res <- tibble()
+  
+ # print(file)
+  # 3. Apply custom "Design" logic
+  if (plane == "PA") {
+    res <- tibble(
+      measure_name = c("ALO", "AW", "WAE", "ATCL", "PABW"),
+      value = c(ALO_fun(mat), AW_fun(mat), WAE_fun(mat), ATCL_fun(mat), PABW_fun(mat))
+    )
+    
+  } else if (plane == "TA") {
+    res <- tibble(
+      measure_name = c("PL", "BL", "TCL", "LTM", "LL", "TABW", "AECL","TATB"),
+      value = c(PL_fun(mat), BL_fun(mat), TCL_fun(mat), LTM_fun(mat), 
+                LL_fun(mat), TABW_fun(mat), AECL_fun(mat), TATB_fun(mat))
+    )
+    
+  } else if (plane == "OA") {
+    res <- tibble(
+      measure_name = c("TBL", "PW", "ATAC", "AEAC"),
+      value = c(TBL_fun(mat), PW_fun(mat), ATAC_fun(mat), AEAC_fun(mat))
+    )
+  }
+  
+  # print(file)
+  # print(row(mat))
+  # print(file)
+  # 4. Add metadata and store in accumulator
+  # Only add if we actually generated results
+  if (nrow(res) > 0) {
+    measurement_accumulator[[id]] <- res %>%
+      mutate(
+        measurer = measurer,
+        sample_id = str_extract(basename(file), "^\\d+"),
+        ind = ind,
+        plane = plane,
+        temp = temp,
+        biorep = biorep
+      )
+  }
+}
+# 5. Bind into one large dataframe
+df_lm <- bind_rows(measurement_accumulator)
+
+df_lm <- df_lm %>% mutate(
+    # Convert from microns (or current unit) to mm
+    value = value / 1000
+  ) 
+```
+
+Removing the value of lobate and auricle when those structures are not present
+standard:
+ALO 0.07mm
+AW 0.07mm
+LTM 0.07mm
+LL 0.07mm
+```{r}
+threshold <- 0.07
+
+df_lm <- df_lm %>% mutate(across(
+    c(value), 
+    ~ if_else(measure_name %in% c("ALO", "AW", "LTM", "LL") & .x < threshold, NA_real_, .x)
+  ))
+  
+```
+
+convert the sample_id to date
+```{r}
+df_lm <- df_lm %>%
+  mutate(date_obj = parse_date_time(paste0(sample_id, "2026"), orders = "mdy")) %>%
+  group_by(biorep) %>%
+  mutate(exp_day = as.numeric(difftime(date_obj, min(date_obj), units = "days"))) %>%
+  ungroup() #%>%
+ # dplyr::select(-c(date_obj))
+```
+change the sample id to individual
+```{r}
+df_lm <- df_lm  %>%
+  mutate(sample_id = paste(ind, temp, biorep, sep = "-"))
+```
+
+## allometric dev visualisation
+
+### obtain the natural log of the value
+Common practice when studying allometric development because it is easier to deal with proportional variation.
+
+```{r}
+#create a new column with log value
+df_lm <- df_lm %>% mutate(log_value = log(value))
+```
+
+###Plotting for the shape versus size LMM study
+
+centroid size is recalculated as a Solid semi-ellipsoid around z-axis (without lobe)
+
+volume: (2*pi*a*b*c)/3
+
+a, b = TABW/2, PABW/2, the principal semi-axes of the base ellipse
+c = BL,the principal z-semi-axe from the center of base ellipse
+
+```{r}
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, log_value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = value
+  ) 
+
+df_lmw <- df_lmw %>% 
+  mutate(centroid = (2 *(TABW/2) * (PABW/2)*BL )/3)
+
+
+measure_cols <- colnames(df_lmw[,6:22])
+df_iso <-  df_lmw  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/centroid), 
+                .names = "shape_{.col}"))
+
+```
+
+
+```{r}
+p1 <-ggplot(df_lmw, aes(x = log(centroid), y = log(TBL), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the tentacle bulb length (mm)") +
+    scale_color_manual(values = c( "#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p4 <-ggplot(df_lmw, aes(x = log(centroid), y = log(TABW), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the body width (mm)") +
+    scale_color_manual(values = c( "#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p2 <- ggplot(df_lmw, aes(x = log(centroid), y = log(LL), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the lobe side length (mm)") +
+    scale_color_manual(values = c("#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+p3 <- ggplot(df_lmw, aes(x = log(centroid), y = log(ALO), colour = temp)) +
+    geom_point(size = 2, alpha = 0.8) +
+    # Add the dashed regression line
+    geom_smooth(method = "lm", formula = y ~ x, color = "black") +
+    theme_classic() +
+    labs(x = "Log Centroid size", y = "Log of the auricle length (mm)") +
+    scale_color_manual(values = c("#00B2CA", "#F79256")) +
+    theme(legend.position = "right")
+#+ stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+
+p <- ggarrange(p1,p4, p2,p3, nrow = 2, ncol = 2,common.legend = TRUE)
+#ggsave(file="/Volumes/Yinghui/202512-dev-seq-analyses/fig/p.svg", plot=p)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/p1.svg", plot=p)
+
+```
+
+#### With all variables:
+
+```{r}
+measure_cols <- colnames(df_lmw[,7:23])
+df_iso <-  df_lmw  %>%  
+  mutate(across(all_of(measure_cols), 
+                ~ log(.x/centroid), 
+                .names = "shape_{.col}"))
+```
+
+```{r}
+library("RRPP")
+# df_clean <- df_iso %>% filter(across(where(is.numeric), is.finite)) %>% ungroup()
+
+# Create a matrix of your shape variables
+shape_matrix <- df_iso %>% ungroup()%>%
+  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
+  dplyr::select(starts_with("shape_")) %>%
+  drop_na() %>%
+   filter(across(where(is.numeric), is.finite)) %>% 
+  as.matrix()
+
+
+df_temp <- df_iso %>% ungroup()%>%
+  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
+  drop_na()%>%
+   filter(across(where(is.numeric), is.finite))
+
+#storage.mode(shape_matrix) <- "double"
+
+nrow(shape_matrix)
+nrow(df_temp)
+
+# Add the centroid back to a clean modeling data frame
+model_data <- rrpp.data.frame(
+  centroid = df_temp$centroid,
+  coords = shape_matrix,
+  temp = as.factor(df_temp$temp)
+)
+#any(!is.finite(shape_matrix)) # Should be FALSE
+#table(model_data$temp)
+fit <- lm.rrpp(coords ~ log(centroid)*temp, SS.type = "I", 
+data = model_data, print.progress = FALSE, iter = 999)
+summary(fit)
+anova(fit)
+```
+## GMM
+
+if only considering shape (because there are temperature as factor, so measurements not normalized by size / body length is not appropriate)
+```{r}
+df_NoLA <- df_iso %>% 
+  dplyr::select(-c("ALO", "AW", "LTM", "LL","shape_LL","shape_LTM","shape_ALO","shape_AW"))%>%
+  drop_na()%>%
+  filter(across(where(is.numeric), is.finite))
+
+df_ori <- df_NoLA[,7:19]
+df_log <- log(df_NoLA[,7:19])
+df_log_shape_ratio <- df_NoLA[,21:33]
+mod1 <- Mclust(df_ori,G=1:12)
+summary(mod1)
+mod2 <- Mclust(df_log,G=1:12)
+summary(mod2)
+mod3 <- Mclust(df_log_shape_ratio,G=1:12)
+summary(mod3)
+```
+```{r}
+p <- fviz_mclust(mod1,"classification",  geom = "point" ) +
+#scale_shape_manual(values = c(16,0,17,8))
+scale_color_manual(values = palette3)+
+scale_fill_manual( values = palette3)
+p2 <- fviz_mclust(mod2,"classification",  geom = "point" ) +
+#scale_shape_manual(values = c(16,0,17,8))
+scale_color_manual(values = palette3)+
+scale_fill_manual( values = palette3)
+p3 <- fviz_mclust(mod3,"classification",  geom = "point" ) +
+#scale_shape_manual(values = c(16,0,17,8))
+scale_color_manual(values = palette3)+
+scale_fill_manual( values = palette3)
+pGMM <- ggarrange(p, p2, p3, nrow = 2, ncol = 2,common.legend = TRUE)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p)
+```
+
+```{r}
+#ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p)
+
+pca <- prcomp(scale(mod1$data))
+fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+fviz_contrib(pca, choice = "var", axes = 2, top = 10)
+fviz_contrib(pca, choice = "var", axes = 3, top = 10)
+
+```
+
+construct the plot after selecting the variables
+```{r}
+#out1 <- clustvarsel(df_ori)
+#mod1_1 <-Mclust(df_ori[, out1$subset])
+#summary(mod1_1)
+#fviz_mclust(mod1_1,"classification",  geom = "point" ) 
+
+```
+
+```{r}
+library(ggalluvial)
+df_iso <- df_iso %>%
+mutate(stage = case_when(
+is.na(ALO) & is.na(LL)  ~ "cydippid",
+is.na(ALO) & !is.na(LL) ~ "early_transition",
+!is.na(ALO) & !is.na(LL) ~ "late_transition",
+TRUE                     ~ "unclassified"
+))
+
+df_NoLA <- df_iso %>% ungroup()%>%
+dplyr::select(-c("ALO", "AW", "LTM", "LL","shape_LL","shape_LTM","shape_ALO","shape_AW"))%>%
+drop_na()%>%
+filter(across(where(is.numeric), is.finite))
+
+df_NoLA$cluster <- as.factor(mod3$classification)
+df_NoLA$cluster_logsize <- as.factor(mod2$classification)
+df_NoLA$cluster_size <- as.factor(mod1$classification)
+
+ggplot(df_NoLA, aes(x = log(centroid), y = log(TABW), color = cluster)) +
+geom_point(size = 1) +
+theme_classic()
+#scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
+```
+
+```{r}
+g_plot <- ggplot(df_NoLA,
+aes(axis1 = cluster, axis2 = stage, y = ..count..)) +
+geom_alluvium(aes(fill = cluster)) +
+geom_stratum() +
+theme_classic() +
+labs(x = "Classification Method",
+y = "Number of images")
+#scale_fill_manual(values = c("#343434","#3880ba","#a4cdee"))
+g_plot
+#ggsave(file="D:/202603-dev-seq-analysis/fig/ggalluvial.svg", plot=g_plot)
+```
+
+```{r}
+ggplot(df_NoLA, aes(x = log(centroid), y = log(TABW), color = cluster)) +
+labs(x = "Log of body length (mm)",y = "log of body width (mm)")+
+geom_point(size = 1) +
+theme_classic()
+#scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
+```
+## segmented
+```{r}
+library(segmented)
+measure_cols <- colnames(df_NoLA[,7:20])
+df_NoLA <- df_NoLA %>%
+  mutate(
+    across(all_of(measure_cols), 
+                ~ log(.x), 
+                .names = "log_{.col}")
+  )%>%
+  mutate(log_centroid = log(centroid))
+
+model1 <- lm(log_TBL ~ log_centroid, data = df_NoLA)
+
+segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+
+df_NoLA$seg_preds1 <- predict(segmented_model1)
+
+pp1 <- ggplot(df_NoLA, aes(x = log_centroid, y = log_TBL, color = cluster)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() +
+  geom_point()+
+    labs(y = "Log TBL")
+```
+
+```{r}
+model1 <- lm(log_TATB ~ log_centroid, data = df_NoLA)
+
+segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+
+df_NoLA$seg_preds1 <- predict(segmented_model1)
+
+ppTATB <- ggplot(df_NoLA, aes(x = log_centroid, y = log_TATB, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() +
+  geom_point()+
+    labs(y = "Log TATB")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+
+```{r}
+ggplot(df_NoLA, aes(x = TATB , y = TBL, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+  #geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+  theme_classic() +
+  geom_point()
+```
+
+```{r}
+df_iso<-  df_iso %>%
+mutate(
+log_AW = log(AW),
+log_centroid = log(centroid)
+)
+df_temp <- df_iso %>% drop_na()
+model2 <- lm(log_AW ~ log_centroid, data =  df_temp)
+segmented_model2 <- segmented(model2, seg.Z = ~log_centroid)
+df_temp$seg_preds2 <- predict(segmented_model2)
+pp2 <- ggplot( df_temp, aes(x = log_centroid, y = log_AW, color = exp_day)) +
+#geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+geom_point() +
+scale_colour_gradient(high = "#132B43", low = "#56B1F7")+
+    labs(y = "Log AW")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/AW_vs_centroid.svg", plot=pp2)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/AW_vs_centroid.svg", plot=pp2)
+```
+
+```{r}
+df_iso<-  df_iso %>%
+mutate(
+log_LL = log(LL)
+)
+df_temp <- df_iso %>% drop_na()
+model2 <- lm(log_LL ~ log_centroid, data =  df_temp)
+segmented_model2 <- segmented(model2, seg.Z = ~log_centroid)
+df_temp$seg_preds2 <- predict(segmented_model2)
+ppLL <- ggplot( df_temp, aes(x = log_centroid, y = log_LL, color = exp_day)) +
+#geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+geom_point() +
+scale_colour_gradient(high = "#132B43", low = "#56B1F7")+
+    labs(y = "Log LL")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/AW_vs_centroid.svg", plot=pp2)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/AW_vs_centroid.svg", plot=pp2)
+```
+
+```{r}
+df_NoLA <- df_NoLA %>%
+mutate(
+log_TCL = log(TCL),
+)
+model1 <- lm(log_TCL ~ log_centroid, data = df_NoLA)
+segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+# getting slope and breakpoint
+segmented_model1$psi
+slope(segmented_model1)
+df_NoLA$seg_preds1 <- predict(segmented_model1)
+pp3 <- ggplot(df_NoLA, aes(x = log_centroid, y = log_TCL, color = stage)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter plot of raw data
+geom_point()+
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+scale_color_manual(values = c("cydippid" = "#a4cdee",
+"early_transition" = "#3880ba",
+"late_transition" = "#343434"))+
+    labs(y = "Log TCL")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+```{r}
+df_NoLA <- df_NoLA %>%
+mutate(
+log_AECL = log(AECL),
+log_ATCL = log(ATCL)
+)
+model4 <- lm(log_AECL ~ log_ATCL, data = df_NoLA)
+segmented_model4 <- segmented(model4, seg.Z = ~log_ATCL)
+# getting slope and breakpoint
+segmented_model4$psi
+slope(segmented_model4)
+df_NoLA$seg_preds4 <- predict(segmented_model4)
+pp4 <- ggplot(df_NoLA, aes(x = log_ATCL, y = log_AECL, color = stage)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter plot of raw data
+geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+geom_point()+
+scale_color_manual(values = c("cydippid" = "#a4cdee",
+"early_transition" = "#3880ba",
+"late_transition" = "#343434"))+
+    labs(y = "Log AECL")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+```{r}
+df_NoLA <- df_NoLA %>%
+mutate(
+log_TABW = log(TABW),
+log_BL = log(BL)
+)
+model4 <- lm(log_TABW ~ log_BL, data = df_NoLA)
+segmented_model4 <- segmented(model4, seg.Z = ~log_BL)
+# getting slope and breakpoint
+segmented_model4$psi
+slope(segmented_model4)
+df_NoLA$seg_preds4 <- predict(segmented_model4)
+pp5 <- ggplot(df_NoLA, aes(x = log_BL, y = log_TABW, color = stage)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter plot of raw data
+geom_point(aes(alpha = 0.6))+
+  geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+scale_color_manual(values = c("cydippid" = "#a4cdee",
+"early_transition" = "#3880ba",
+"late_transition" = "#343434"))+
+    labs(y = "Log TABW")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+```{r}
+model4 <- lm(log_ATAC ~ log_centroid, data = df_NoLA)
+segmented_model4 <- segmented(model4, seg.Z = ~log_centroid)
+# getting slope and breakpoint
+segmented_model4$psi
+slope(segmented_model4)
+df_NoLA$seg_preds4 <- predict(segmented_model4)
+pp6 <- ggplot(df_NoLA, aes(x = log_centroid, y = log_ATAC, color = stage)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter plot of raw data
+  geom_point(aes(alpha = 0.6))+
+geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+scale_color_manual(values = c("cydippid" = "#a4cdee",
+"early_transition" = "#3880ba",
+"late_transition" = "#343434"))+
+    labs(y = "Log ATAC")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+Put together a figure
+```{r}
+#ggsave(
+#   file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/stage_strcture_1.pdf", 
+   plot = ggarrange(pp1,ppTATB, pp2, ppLL, pp3,pp4, nrow = 3, ncol=2)
+plot
+#)
+```
+
+```{r}
+#ggsave(
+#   file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/stage_strcture_2.pdf", 
+   plot = ggarrange(pp5, pp6, nrow = 1, ncol=2)
+#)
+plot
+```
+
+```{r}
+#ggsave(
+#   file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/cluster_2.pdf", 
+   plot = ggarrange(p, p2, p3, nrow = 2, ncol=2)
+#)
+plot
+```
+
+# 0417 new added
+```{r}
+model4 <- lm(log_ATAC ~ log_centroid, data = df_NoLA)
+segmented_model4 <- segmented(model4, seg.Z = ~log_centroid)
+# getting slope and breakpoint
+segmented_model4$psi
+slope(segmented_model4)
+df_NoLA$seg_preds4 <- predict(segmented_model4)
+pp7 <- ggplot(df_NoLA, aes(x = log_centroid, y = log_ATAC, color = cluster)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter plot of raw data
+  geom_point()+
+geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+    labs(y = "Log ATAC")
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+#ggsave(file="D:/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
+```
+
+```{r}
+model1 <- lm(log_TCL ~ log_centroid, data = df_NoLA)
+segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+# getting slope and breakpoint
+segmented_model1$psi
+slope(segmented_model1)
+df_NoLA$seg_preds1 <- predict(segmented_model1)
+pp8 <- ggplot(df_NoLA, aes(x = log_centroid, y = log_TCL, color = cluster)) +
+#geom_point(color = c("#A3CEF1","#3880ba","#343434"), alpha = 0.8) +                # Scatter 
+  geom_point()+
+geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+theme_classic() +
+    labs(y = "Log TCL")
+```
+
+```{r}
+#ggsave(
+#   file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/stage_cluster_1.pdf", 
+   plot = ggarrange(pp6, pp7, pp3, pp8, nrow = 2, ncol=2)
+#)
+plot
+```

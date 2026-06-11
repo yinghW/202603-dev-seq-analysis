@@ -1,6 +1,0 @@
-"0","df_onlyLA <- df_lm %>% group_by(measure_name) %>% filter(measure_name %in% c(""LL"", ""LTM"")) %>% ungroup()"
-"0",""
-"0","ggplot(df_onlyLA,aes(x=sample_id, y = value, color = measure_name))+"
-"0","  geom_point(size = 1) +"
-"0","  theme_classic() + "
-"0","  scale_fill_manual(values = palette1)"
