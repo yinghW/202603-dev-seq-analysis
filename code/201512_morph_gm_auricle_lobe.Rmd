@@ -212,10 +212,10 @@ target_max_pc1 <- gpaTA$coords[, , pc1_max_idx]
 # Extract the landmark matrix for the PC1 minimum position
 target_min_pc1 <- gpaTA$coords[, , pc1_min_idx]
 
-# Extract the landmark matrix for the PC1 maximum position
+# Extract the landmark matrix for the PC2 maximum position
 target_max_pc2 <- gpaTA$coords[, , pc2_max_idx]
 
-# Extract the landmark matrix for the PC1 minimum position
+# Extract the landmark matrix for the PC2 minimum position
 target_min_pc2 <- gpaTA$coords[, , pc2_min_idx]
 ```
 Plot the PCA and the WRAP analysis 

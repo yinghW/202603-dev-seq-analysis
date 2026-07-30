@@ -23,6 +23,16 @@ library(clustvarsel)
 library(mclust)
 library(ggpubr)
 library(svglite)
+
+#new package
+# devtools::install_github("millacarmona/morphospace")
+library(morphospace)
+library(geomorph)
+library(Morpho)
+# devtools::install_github("MomX/Momocs")
+library(Momocs)
+library(magrittr)
+library(rgl)
 ```
 
 
@@ -116,14 +126,9 @@ gpaOA <- gpagen(oa_3d_array)
 plotAllSpecimens(gpaOA$coords)
 ```
 
-```{r}
-PCA_OA <- gm.prcomp(gpaOA$coords)
-plot(PCA_OA)
-```
 ###CVA
 
 ```{r}
-library(Morpho)
 CVA_stage=CVA(gpaOA$coords, df_NoLA$stage, weighting = TRUE,
 	plot = TRUE, rounds = 1000, cv = TRUE)
 CVA_stage
@@ -132,6 +137,29 @@ plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
      col = stage,
      xlab = "CV1", ylab = "CV2")
 legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+
+### morphospace
+
+```{r}
+shapes <- gpaOA$coords
+
+lks <- list(c(2,3), c(4,5), c(6,7))
+
+# Generate morphospace
+mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
+```
+
+```{r}
+data("tails")
+
+shapes <- tails$shapes
+spp <- tails$data$species
+wf <- tails$links
+phy <- tails$tree
+
+# Generate morphospace
+mspace(shapes, links = wf, cex.ldm = 5)
 
 ```
 ### between-group PCA
@@ -307,9 +335,56 @@ legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 ```
 ### TA without lobe landmarks
 ```{r}
-ta_final_points <- ta_3d_array[c(13,8,9,3,4) , ,]
+ta_final_points <- ta_3d_array[c(13,8,9,3,4,5,10,11,12,1,2) , ,]
+gpaTA_2 <- gpagen(ta_final_points)
 
 ```
+### morphospace
+
+```{r}
+shapes <- gpaTA_2$coords
+#stage <- df_NoLA$stage
+#lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
+lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
+
+# Generate morphospace
+mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
+```
+
+```{r}
+# Get mean shapes of each stage
+stg_shapes <- expected_shapes(shapes = shapes, x = stage)
+
+# Generate morphospace and project:
+msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
+  # scatter points
+  proj_shapes(shapes = shapes, col = stage) %>% 
+  # convex hulls enclosing groups
+  proj_groups(shapes = shapes, groups = stage, alpha = 0.5) 
+```
+Allometric analysis
+```{r}
+# remove allometric variation for each species
+d_out <- out * 0
+for(i in 1:nlevels(sp)) {
+  index <- which(sp == levels(sp)[i])
+  mod <- lm(out[index,] ~ size[index])
+  d_out[index,] <- detrend_shapes(mod,
+                                  xvalue = max(size[index]),
+                                  method = "residuals")
+}
+
+# get bgPCA
+bgpca <- bg_prcomp(x = d_out, groups = sp)
+
+# generate bgPCA morphospace with detrended shapes; project shapes and ellipses
+mspace(ord = bgpca, datype = "fcoef", nh = 8, nv = 6, size.models = 1.5,
+       bg.model = "light gray", invax = c(1,2)) %>%
+  proj_shapes(shapes = d_out, col = sp) %>%
+  proj_groups(shapes = d_out, groups = sp, alpha = 0.4, ellipse = TRUE)
+
+```
+
 ## PA
 ```{r}
 pa_idx <- sapply(specs_list, function(x) {
