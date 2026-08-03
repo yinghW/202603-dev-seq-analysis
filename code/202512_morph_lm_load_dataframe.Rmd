@@ -196,7 +196,7 @@ df_lm <- df_lm %>% mutate(log_value = log(value))
 
 ###Plotting for the shape versus size LMM study
 
-centroid size is recalculated as a Solid semi-ellipsoid around z-axis (without lobe)
+estimated volume is recalculated as a Solid semi-ellipsoid around z-axis (without lobe)
 
 volume: (2*pi*a*b*c)/3
 
@@ -213,7 +213,7 @@ df_lmw <- df_lm %>%
   ) 
 
 df_lmw <- df_lmw %>% 
-  mutate(centroid = (2 *(TABW/2) * (PABW/2)*BL*pi )/3)
+  mutate(vol = (2 *(TABW/2) * (PABW/2)*BL*pi )/3)
 
 ```
 
@@ -223,7 +223,7 @@ df_lmw <- df_lmw %>%
 measure_cols <- colnames(df_lmw[,7:23])
 df_iso <-  df_lmw  %>%  
   mutate(across(all_of(measure_cols), 
-                ~ log(.x/centroid), 
+                ~ log(.x/vol), 
                 .names = "shape_{.col}"))
 ```
 

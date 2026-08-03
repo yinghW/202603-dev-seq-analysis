@@ -39,7 +39,7 @@ df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
 ```
 
 ```{r}
-ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
+ggplot(df_iso, aes(x = log(vol), y = log(TCL), color = stage)) +
 geom_point(size = 1) +
 theme_classic()
 ```
@@ -94,22 +94,22 @@ df_NoLA_sg <- df_NoLA %>%
                 ~ log(.x), 
                 .names = "log_{.col}")
   )%>%
-  mutate(log_centroid = log(centroid))
+  mutate(log_vol = log(vol))
 
-model1 <- lm(log_TBL ~ log_centroid, data = df_NoLA_sg)
+model1 <- lm(log_TBL ~ log_vol, data = df_NoLA_sg)
 
-segmented_model1 <- segmented(model1, seg.Z = ~log_centroid)
+segmented_model1 <- segmented(model1, seg.Z = ~log_vol)
 
 df_NoLA_sg$seg_preds1 <- predict(segmented_model1)
 
-pp1 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TBL, color = cluster_shape)) +
+pp1 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TBL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic() +
     labs(y = "Log TBL")
 
-pp2 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TBL, color = stage)) +
+pp2 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TBL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
@@ -140,19 +140,19 @@ ggarrange(pp1,pp2, pp3,pp4,ncol = 2, nrow = 2)
 ```
 
 ```{r}
-model3 <- lm(log_TCL ~ log_centroid, data = df_NoLA_sg)
+model3 <- lm(log_TCL ~ log_vol, data = df_NoLA_sg)
 
-segmented_model3 <- segmented(model3, seg.Z = ~log_centroid)
+segmented_model3 <- segmented(model3, seg.Z = ~log_vol)
 
 df_NoLA_sg$seg_preds3 <- predict(segmented_model3)
 
-pp5 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TCL, color = cluster_shape)) +
+pp5 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TCL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic()
 
-pp6 <- ggplot(df_NoLA_sg, aes(x = log_centroid, y = log_TCL, color = stage)) +
+pp6 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TCL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line

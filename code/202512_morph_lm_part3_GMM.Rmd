@@ -40,7 +40,7 @@ df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
 ```
 
 ```{r}
-ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
+ggplot(df_iso, aes(x = log(vol), y = log(TCL), color = stage)) +
 geom_point(size = 1) +
 theme_classic()
 ```
@@ -183,7 +183,7 @@ df_NoLA$cluster_log <- as.factor(mod2$classification)
 df_NoLA$cluster_shape <- as.factor(mod3$classification)
 df_NoLA$cluster_shape_gm <- as.factor(mod4$classification)
 
-ggplot(df_NoLA, aes(x = log(centroid), y = log(TABW), color = cluster_shape)) +
+ggplot(df_NoLA, aes(x = log(vol), y = log(TABW), color = cluster_shape)) +
 geom_point(size = 1) +
 theme_classic()
 #scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
@@ -231,7 +231,7 @@ nrow(df_temp)
 
 # Add the centroid back to a clean modeling data frame
 model_data <- rrpp.data.frame(
-  centroid = df_temp$centroid,
+  vol = df_temp$vol,
   coords = shape_matrix,
   temp = as.factor(df_temp$temp),
   age = df_temp$exp_day,
@@ -239,7 +239,7 @@ model_data <- rrpp.data.frame(
 )
 #any(!is.finite(shape_matrix)) # Should be FALSE
 #table(model_data$temp)
-fit <- lm.rrpp(coords ~ log(centroid)*temp*age, SS.type = "I", 
+fit <- lm.rrpp(coords ~ log(vol)*temp*age, SS.type = "I", 
 data = model_data, print.progress = FALSE, iter = 999)
 summary(fit)
 anova(fit)
@@ -255,14 +255,14 @@ pc1_scores <- pca_shape$x[, 1]
 
 standard_df <- data.frame(
   pc1   = pc1_scores,
-  centroid = df_NoLA$centroid,
+  vol = df_NoLA$vol,
   temp     = df_NoLA$temp,
   age      = df_NoLA$exp_day,
   biorep   = df_NoLA$biorep
 )
 
 # Run the model again
-model <- lmer(pc1 ~ log(centroid) * temp * age + (1 | biorep),
+model <- lmer(pc1 ~ log(vol) * temp * age + (1 | biorep),
               data = standard_df)
 summary(model)
 anova(model)

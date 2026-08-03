@@ -39,7 +39,7 @@ df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
 ```
 
 ```{r}
-ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
+ggplot(df_iso, aes(x = log(vol), y = log(TCL), color = stage)) +
 geom_point(size = 1) +
 theme_classic()
 ```
@@ -153,7 +153,7 @@ ggplot(df_plot, aes(x = t_centroid, y = resPC1, color = stage)) +
 ```{r}
 residual_data <- df_NoLA %>%
   mutate(across(all_of(measure_cols), 
-    ~ residuals(lm(log(.x) ~ log(centroid), na.action = na.exclude))
+    ~ residuals(lm(log(.x) ~ log(vol), na.action = na.exclude))
   )) %>%
 dplyr::select(all_of(measure_cols))
 ```
@@ -171,7 +171,7 @@ df_final_plot <- df_NoLA %>%
 ```
 
 ```{r}
-ggplot(df_final_plot, aes(x = centroid, y = resPC1, color = stage)) +
+ggplot(df_final_plot, aes(x = vol, y = resPC1, color = stage)) +
   geom_point() +
   scale_size_continuous(range = c(2, 6)) +
   theme_classic()
