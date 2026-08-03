@@ -104,7 +104,7 @@ df_NoLA <-  df_NoLA  %>%
                 .names = "shape_ratio_{.col}"))
 #df_NoLA[,7:19]
 #df_NoLA[,40:52],
-#f_NoLA[,21:33]
+#df_NoLA[,21:33]
  pca<- prcomp(df_NoLA[,21:33],
                    center = TRUE,
                    scale. = TRUE)

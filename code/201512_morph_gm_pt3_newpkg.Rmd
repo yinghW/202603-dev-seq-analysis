@@ -333,11 +333,12 @@ plot(PCASizeShape$x[,1],PCASizeShape$x[,2],
 legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 
 ```
+
 ### TA without lobe landmarks
+with landmarks 6,7 related to lobe removed 
 ```{r}
 ta_final_points <- ta_3d_array[c(13,8,9,3,4,5,10,11,12,1,2) , ,]
 gpaTA_2 <- gpagen(ta_final_points)
-
 ```
 ### morphospace
 

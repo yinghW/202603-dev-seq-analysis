@@ -35,6 +35,8 @@ Import the dataframe created in the load_dataframe.rmd
 df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
 df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
 df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+
+df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
 ```
 
 ```{r}
@@ -62,19 +64,30 @@ df_NoLA <-  df_NoLA  %>%
 ```
 
 ```{r}
-
+# linear measurement
 df_ori <- df_NoLA[,7:19]
+# log transformed linear measurement
 df_log <- log(df_NoLA[,7:19])
+# 
 df_log_shape_ratio <- df_NoLA[,21:33]
+#
 df_log_shape_ration_gm <- df_NoLA[,36:48]
+
 mod1 <- Mclust(df_ori,G=1:12)
 summary(mod1)
+# mod1: 9 clusters
+
 mod2 <- Mclust(df_log,G=1:12)
 summary(mod2)
+# mod2: 6 clusters
+
 mod3 <- Mclust(df_log_shape_ratio,G=1:12)
 summary(mod3)
+# mod3: 4 cluster
+
 mod4 <- Mclust(df_log_shape_ration_gm,G=1:12)
 summary(mod4)
+#
 ```
 
 ```{r}
