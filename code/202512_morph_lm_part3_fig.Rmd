@@ -35,18 +35,18 @@ Import the dataframe created in the load_dataframe.rmd
 df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
 df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
 df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
-df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+df_gmm_export <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
 ```
 
-```{r}
-ggplot(df_iso, aes(x = log(vol), y = log(TCL), color = stage)) +
-geom_point(size = 1) +
-theme_classic()
-```
+
 ## similarity and association of the measurements BL, PL, PABW, TABW
 ```{r}
-df_NoLA %>%
-  # 1. Reshape the data to long format
+df_NoLA_20 <- df_gmm_export %>%
+  filter(temp == "20" )
+
+df_NoLA_20 %>%
+  # Reshape the data to long format
   pivot_longer(
     cols = c(BL, PL, PABW, TABW), 
     names_to = "Measurement", 
@@ -82,9 +82,32 @@ df_NoLA %>%
     x = "Experimental Day",
     y = "Value"
   ) +
-  theme_minimal()
+  theme_classic()
 ```
 
+# day v.s. group
+```{r}
+#df_gmm_export
+
+day_stage <- ggplot(df_NoLA_20,aes(x = exp_day, y = BL)) +
+  # Scatter plot points
+  geom_point(size = 1, alpha = 0.5, aes(color =stage)) +
+  geom_smooth(alpha = 0.1, size = 1) +
+  theme_classic()
+day_stage
+
+day_cluster <- ggplot(df_NoLA_20,aes(x = exp_day, y = BL)) +
+  # Scatter plot points
+  geom_point(size = 1, alpha = 0.5, aes(color =cluster_shape)) +
+  geom_smooth(alpha = 0.1, size = 1) +
+  theme_classic()
+day_cluster
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_stage.svg", plot=day_stage)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_cluster.svg", plot=day_cluster)
+
+```
+
+# Segmented regression
 ```{r}
 library(segmented)
 measure_cols <- colnames(df_NoLA[,7:20])

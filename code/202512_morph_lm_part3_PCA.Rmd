@@ -28,6 +28,7 @@ library(clustvarsel)
 library(mclust)
 library(ggpubr)
 library(svglite)
+library(MASS)
 ```
 
 Import the dataframe created in the load_dataframe.rmd
@@ -35,40 +36,61 @@ Import the dataframe created in the load_dataframe.rmd
 df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
 df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
 df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
-df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA_6.4 <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+df_gmm_export <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
+
 ```
 
-```{r}
-ggplot(df_iso, aes(x = log(vol), y = log(TCL), color = stage)) +
-geom_point(size = 1) +
-theme_classic()
-```
-```{r}
-measure_cols <- colnames(df_NoLA[,7:19])
-df_NoLA <-  df_NoLA  %>%  
-  mutate(across(all_of(measure_cols), 
-                ~ log(.x/exp(mean(log(.x)))), 
-                .names = "shape_ratio_{.col}"))
-```
-
-## CVA
 
 ```{r}
-library(MASS)
+#df_NoLA <- df_iso %>% 
+#  dplyr::select(-c("ALO", "AW", "LTM", "LL", "sd_LL","sd_LTM","sd_ALO","sd_AW"))%>%
+#  drop_na() %>%
+#  filter(if_all(where(is.numeric),  ~ is.finite(.x) & .x != 0))
+  #filter(if_all(where(is.numeric), is.finite))
 
 #df_NoLA[,7:19]
-#df_NoLA[,21:33]
+#df_NoLA[,20:32], lm standardized by volume and logged
 #df_NoLA[,39:51]
-df_test <-df_NoLA[,21:33] %>% mutate (stage = df_NoLA$stage)
-  
+
+df_test <-df_gmm_export[,20:32] %>% 
+  mutate (stage = df_gmm_export$stage) %>% 
+  dplyr::select(-c("sd_BL"))
+
+```
+
+## Linear discriminate analysis
+```{r}
 lda.stg <-lda(stage ~ ., data = df_test)
 lda.stg
 ```
 
+```{r}
+# Extract scaling matrix and compute absolute coefficients
+df_coefs <- as.data.frame(lda.stg$scaling) %>%
+  tibble::rownames_to_column(var = "Feature") %>%
+  mutate(
+    # Create absolute values for sorting importance
+    Abs_LD1 = abs(LD1)
+  )
+
+lda_con <- ggplot(df_coefs, aes(x = reorder(Feature, Abs_LD1), y = LD1, fill = LD1 > 0)) +
+  geom_col(show.legend = FALSE, width = 0.6) +
+  coord_flip() +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+lda_con
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
+```
 plot
 ```{r}
 stg.sub <- 
-  df_NoLA[,21:33]%>% 
+  df_test[1:12]%>% 
   as.matrix  # cast to matrix for calculations
 
 # calculate CV scores
@@ -88,53 +110,95 @@ cva.plot <-
 
 cva.plot
 ```
-
+```{r}
+lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) + 
+  geom_point(aes(color=stage), alpha=0.7) + 
+  coord_fixed(ratio=1)+
+  theme_classic()# keep the unit scaling of the plot fixed at 1
+lda_plot
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot.svg", plot=lda_plot)
+```
 ```{r}
 ggplot(stg.CV, aes(x = LD1)) +
   geom_density(aes(color=stage)) +
   labs(x = "CV1")
 ```
 
+### LDA of gmm defined groups
+```{r}
+df_test2 <-df_gmm_export[,20:32] %>% 
+  mutate (cluster = df_gmm_export$cluster_shape) %>% 
+  dplyr::select(-c("sd_BL"))
+
+lda.stg <-lda(cluster ~ ., data = df_test2)
+lda.stg
+
+stg.sub <- 
+  df_test2[1:12]%>% 
+  as.matrix  # cast to matrix for calculations
+
+# calculate CV scores
+CVA.scores <- stg.sub %*% lda.stg$scaling
+
+# create data frame with scores
+stg.CV <- data.frame(CVA.scores)
+stg.CV$cluster <- df_test2$cluster
+lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) + 
+  geom_point(aes(color=cluster), alpha=0.7) + 
+  coord_fixed(ratio=1)+
+  theme_classic()# keep the unit scaling of the plot fixed at 1
+lda_plot
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_cluster.svg", plot=lda_plot)
+```
+
+
+
 #PCA
 ```{r}
-measure_cols <- colnames(df_NoLA[,7:19])
-df_NoLA <-  df_NoLA  %>%  
-  mutate(across(all_of(measure_cols), 
-                ~ log(.x/exp(mean(log(.x)))), 
-                .names = "shape_ratio_{.col}"))
+#measure_cols <- colnames(df_NoLA[,7:19])
+#df_NoLA <-  df_NoLA  %>%  
+#  mutate(across(all_of(measure_cols), 
+#                ~ log(.x/exp(mean(log(.x)))), 
+#                .names = "shape_ratio_{.col}"))
 #df_NoLA[,7:19]
 #df_NoLA[,40:52],
 #df_NoLA[,21:33]
- pca<- prcomp(df_NoLA[,21:33],
+df_test <- df_test %>% mutate(cluster = df_gmm_export$cluster_shape)
+pca<- prcomp(df_test[,1:12],
                    center = TRUE,
                    scale. = TRUE)
 
 ```
 
+## color by stage
 ```{r}
 library(ggfortify)
 pca.plot <- autoplot(pca,
-                          data = df_NoLA,
+                          data = df_test,
                           colour = 'stage')
 
 pca.plot
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca.plot.svg", plot=pca.plot)
 ```
 
 ```{r}
-fviz_contrib(pca, choice = "var", axes = 1, top = 10)
-fviz_contrib(pca, choice = "var", axes = 2, top = 10)
+con1 <- fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+con2 <- fviz_contrib(pca, choice = "var", axes = 2, top = 10)
 fviz_contrib(pca, choice = "var", axes = 3, top = 10)
+```
+```{r}
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution1.svg", plot=con1)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution2.svg", plot=con2)
 ```
 
 ```{r}
 # Custom function for row-wise geometric mean
-rowGeometricMeans <- function(data, na.rm = TRUE) {
-  exp(rowMeans(log(data), na.rm = na.rm))
-}
+#rowGeometricMeans <- function(data, na.rm = TRUE) {
+#  exp(rowMeans(log(data), na.rm = na.rm))
+#}
 
-df_NoLA <- df_NoLA %>%
-  mutate(t_centroid = rowGeometricMeans(pick(all_of(measure_cols)), na.rm = TRUE))
-
+#df_NoLA <- df_NoLA %>%
+#  mutate(t_centroid = rowGeometricMeans(pick(all_of(measure_cols)), na.rm = TRUE))
 ```
 
 ```{r}
@@ -147,7 +211,7 @@ ggplot(df_plot, aes(x = t_centroid, y = resPC1, color = stage)) +
   theme_classic() + labs(x = "size", y = "PC1 score")
 ```
 
-### perform PCA on the residuls
+### perform PCA on the residuals
 
 
 ```{r}

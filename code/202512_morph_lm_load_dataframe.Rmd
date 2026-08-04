@@ -203,6 +203,8 @@ volume: (2*pi*a*b*c)/3
 a, b = TABW/2, PABW/2, the principal semi-axes of the base ellipse
 c = BL,the principal z-semi-axe from the center of base ellipse
 
+**2026.8 updates: using body length as estimation of size**
+
 ```{r}
 df_lmw <- df_lm %>%
   dplyr::select(-c(plane, log_value)) %>%
@@ -212,19 +214,20 @@ df_lmw <- df_lm %>%
     values_from = value
   ) 
 
-df_lmw <- df_lmw %>% 
-  mutate(vol = (2 *(TABW/2) * (PABW/2)*BL*pi )/3)
-
+# previous version: using estimated volume as estimation of size
+#df_lmw <- df_lmw %>% 
+#  mutate(vol = (2 *(TABW/2) * (PABW/2)*BL*pi )/3)
 ```
 
 #### With all variables:
 
 ```{r}
+# standardize the body size through body length
 measure_cols <- colnames(df_lmw[,7:23])
 df_iso <-  df_lmw  %>%  
   mutate(across(all_of(measure_cols), 
-                ~ log(.x/vol), 
-                .names = "shape_{.col}"))
+                ~ .x/BL, 
+                .names = "sd_{.col}"))
 ```
 
 add stage

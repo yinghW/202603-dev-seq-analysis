@@ -39,7 +39,8 @@ Dir:"/Volumes/Yinghui/202512-dev-seq-analyses"
 # df <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
 #df <- readRDS("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds")
 
-files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+#files <- c("D:/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "D:/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
+files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds", "/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-dev-seq-v6.rds")
 df <- lapply(files, readRDS) %>% bind_rows()
 ```
 
@@ -214,23 +215,63 @@ df_lmw <- df_lm %>%
   pivot_wider(
     names_from = measure_name,
     values_from = value
-  ) %>%
+  ) #%>%
   # Filter to only rows where temp is 20
-  filter(temp == 20)
+  #filter(temp == 20)
 
 ```
-plot by individual
-
-plot all measurements together
+## Plot by ratio of different measurements
 ```{r}
-p1 <- ggplot(df_lmw, aes(x = BL, y = TABW)) +
-  geom_smooth(method = "lm", linewidth = 1) +
-  geom_point()+
-  theme_classic() +
-  labs(x = "Body length (mm)",
-      y = "Body width from tentacular axial plane (mm)")
+df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+df_lmw <- df_lm %>%
+  dplyr::select(-c(plane, log_value)) %>%
+  group_by(sample_id, ind) %>%
+  pivot_wider(
+    names_from = measure_name,
+    values_from = value
+  )
+p1 <- ggplot(df_iso, aes(x = BL, y = TABW)) +
+  geom_smooth( method = "lm", linewidth = 1) +
+  geom_point(aes(color = stage))+
+  theme_classic() 
 p1
 
+model1 <- lm(TABW ~ BL, data = df_lmw)
+summary(model1)
+```
+```{r}
+p2 <- ggplot(df_iso, aes(x = BL, y = PABW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point(aes(color = stage))+
+  theme_classic() 
+p2
+
+model2 <- lm(PABW ~ BL, data = df_lmw)
+summary(model2)
+```
+```{r}
+p3 <- ggplot(df_iso, aes(x = TABW, y = PABW)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point(aes(color = stage))+
+  theme_classic() 
+p3
+
+model3 <- lm(PABW ~ TABW, data = df_lmw)
+summary(model3)
+```
+```{r}
+p4 <- ggplot(df_iso, aes(x = BL, y = PL)) +
+  geom_smooth(method = "lm", linewidth = 1) +
+  geom_point(aes(color = stage))+
+  theme_classic() 
+p4
+
+model4 <- lm(PL ~ BL, data = df_lmw)
+summary(model4)
+```
+
+
+```{r}
 p2 <- ggplot(df_lmw, aes(x = ALO, y = AW)) +
   geom_smooth(method = "lm", linewidth = 1) +
   geom_point()+
