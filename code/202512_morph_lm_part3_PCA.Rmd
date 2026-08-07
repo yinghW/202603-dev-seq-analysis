@@ -178,7 +178,7 @@ pca.plot <- autoplot(pca,
                           colour = 'stage')
 
 pca.plot
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca.plot.svg", plot=pca.plot)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca.plot.svg", plot=pca.plot)
 ```
 
 ```{r}
@@ -186,6 +186,15 @@ con1 <- fviz_contrib(pca, choice = "var", axes = 1, top = 10)
 con2 <- fviz_contrib(pca, choice = "var", axes = 2, top = 10)
 fviz_contrib(pca, choice = "var", axes = 3, top = 10)
 ```
+identify the min and max point of PC1 to check for outliers
+```{r}
+min_idx <- which.min(pca$x[, 1])
+df_gmm_export[min_idx,]
+
+max_idx <- which.max(pca$x[, 2])
+df_gmm_export[max_idx,]
+```
+
 ```{r}
 #ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution1.svg", plot=con1)
 #ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution2.svg", plot=con2)

@@ -138,8 +138,8 @@ scale_fill_manual( values = palette3)
 p3
 p4
 #pGMM <- ggarrange(p, p2, p3,p4, nrow = 2, ncol = 2,common.legend = TRUE)
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_standardized_cluster_result.svg", plot=p3)
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_sd_log.svg", plot=p4)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_standardized_cluster_result.svg", plot=p3)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_sd_log.svg", plot=p4)
 #ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p3)
 ```
 

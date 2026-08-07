@@ -234,7 +234,7 @@ add stage
 ```{r}
 df_pt <- read.csv("/Volumes/Yinghui/202603-dev-seq-analysis/data/202509-10-dev-tentacle.csv",header = TRUE)
 
-df_pt <- df_pt %>% select(c("sample_id","exp_day","tentacle"))
+df_pt <- df_pt %>% dplyr::select(c("sample_id","exp_day","tentacle"))
 
 df_iso <- left_join(df_iso, df_pt, by = c("sample_id","exp_day"))
 

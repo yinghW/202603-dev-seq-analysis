@@ -110,50 +110,50 @@ ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_cluster.svg", p
 # Segmented regression
 ```{r}
 library(segmented)
-measure_cols <- colnames(df_NoLA[,7:20])
-df_NoLA_sg <- df_NoLA %>%
-  mutate(
-    across(all_of(measure_cols), 
-                ~ log(.x), 
-                .names = "log_{.col}")
-  )%>%
-  mutate(log_vol = log(vol))
+measure_cols <- colnames(df_gmm_export[,7:20])
+# df_NoLA_sg <- df_NoLA %>%
+#  mutate(
+#    across(all_of(measure_cols), 
+#                ~ log(.x), 
+#                .names = "log_{.col}")
+#  )%>%
+#  mutate(log_vol = log(vol))
 
-model1 <- lm(log_TBL ~ log_vol, data = df_NoLA_sg)
+model1 <- lm(TBL ~ BL, data = df_gmm_export)
 
-segmented_model1 <- segmented(model1, seg.Z = ~log_vol)
+segmented_model1 <- segmented(model1, seg.Z = ~BL)
 
-df_NoLA_sg$seg_preds1 <- predict(segmented_model1)
+df_gmm_export$seg_preds1 <- predict(segmented_model1)
 
-pp1 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TBL, color = cluster_shape)) +
+pp1 <- ggplot(df_gmm_export, aes(x = BL, y = TBL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic() +
-    labs(y = "Log TBL")
+    labs(y = "TBL")
 
-pp2 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TBL, color = stage)) +
+pp2 <- ggplot(df_gmm_export, aes(x = BL, y = TBL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic() +
-    labs(y = "Log TBL")
+    labs(y = "TBL")
 ```
 
 ```{r}
-model2 <- lm(log_ATAC ~ log_AEAC, data = df_NoLA_sg)
+model2 <- lm(ATAC ~ AEAC, data = df_gmm_export)
 
-segmented_model2 <- segmented(model2, seg.Z = ~log_AEAC)
+segmented_model2 <- segmented(model2, seg.Z = ~AEAC)
 
-df_NoLA_sg$seg_preds2 <- predict(segmented_model2)
+df_gmm_export$seg_preds2 <- predict(segmented_model2)
 
-pp3 <- ggplot(df_NoLA_sg, aes(x = log_AEAC, y = log_ATAC, color = cluster_shape)) +
+pp3 <- ggplot(df_gmm_export, aes(x = AEAC, y = ATAC, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic() 
 
-pp4 <- ggplot(df_NoLA_sg, aes(x = log_AEAC, y = log_ATAC, color = stage)) +
+pp4 <- ggplot(df_gmm_export, aes(x = AEAC, y = ATAC, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
@@ -163,19 +163,19 @@ ggarrange(pp1,pp2, pp3,pp4,ncol = 2, nrow = 2)
 ```
 
 ```{r}
-model3 <- lm(log_TCL ~ log_vol, data = df_NoLA_sg)
+model3 <- lm(TCL ~ BL, data = df_gmm_export)
 
-segmented_model3 <- segmented(model3, seg.Z = ~log_vol)
+segmented_model3 <- segmented(model3, seg.Z = ~BL)
 
-df_NoLA_sg$seg_preds3 <- predict(segmented_model3)
+df_gmm_export$seg_preds3 <- predict(segmented_model3)
 
-pp5 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TCL, color = cluster_shape)) +
+pp5 <- ggplot(df_gmm_export, aes(x = BL, y = TCL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
   theme_classic()
 
-pp6 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TCL, color = stage)) +
+pp6 <- ggplot(df_gmm_export, aes(x = BL, y = TCL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
@@ -183,4 +183,3 @@ pp6 <- ggplot(df_NoLA_sg, aes(x = log_vol, y = log_TCL, color = stage)) +
 ```
 
 
-```
