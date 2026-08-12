@@ -115,11 +115,36 @@ dim(oa_3d_array)
 gpaOA <- gpagen(oa_3d_array)
 plotAllSpecimens(gpaOA$coords)
 ```
-
+###PCA
 ```{r}
 PCA_OA <- gm.prcomp(gpaOA$coords)
 plot(PCA_OA)
 ```
+
+```{r}
+# # Identify the index for PC1 extremes
+pc1_max_idx <- which.max(PCA_OA$x[, 1])
+pc1_min_idx <- which.min(PCA_OA$x[, 1])
+
+# Identify the index for PC2 extremes
+pc2_max_idx <- which.max(PCA_OA$x[, 2])
+pc2_min_idx <- which.min(PCA_OA$x[, 2])
+```
+
+```{r}
+# Extract the landmark matrix for the PC1 maximum position
+target_max_pc1 <- PCA_OA$coords[, , pc1_max_idx]
+
+# Extract the landmark matrix for the PC1 minimum position
+target_min_pc1 <- PCA_OA$coords[, , pc1_min_idx]
+
+# Extract the landmark matrix for the PC2 maximum position
+target_max_pc2 <- PCA_OA$coords[, , pc2_max_idx]
+
+# Extract the landmark matrix for the PC2 minimum position
+target_min_pc2 <- PCA_OA$coords[, , pc2_min_idx]
+```
+
 ###CVA
 
 ```{r}

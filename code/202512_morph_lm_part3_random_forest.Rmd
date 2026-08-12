@@ -28,6 +28,9 @@ library(clustvarsel)
 library(mclust)
 library(ggpubr)
 library(svglite)
+
+library(randomForest)
+library(caret)
 ```
 
 Import the dataframe created in the load_dataframe.rmd
@@ -35,248 +38,84 @@ Import the dataframe created in the load_dataframe.rmd
 df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
 df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
 df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+df_gmm_export <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
 ```
 
-```{r}
-ggplot(df_iso, aes(x = log(centroid), y = log(TCL), color = stage)) +
-geom_point(size = 1) +
-theme_classic()
-```
 
-## GMM
+# Random forest
 
-if only considering shape (because there are temperature as factor, so measurements not normalized by size / body length is not appropriate)
-```{r}
-df_NoLA <- df_iso %>% 
-  dplyr::select(-c("ALO", "AW", "LTM", "LL", "shape_LL","shape_LTM","shape_ALO","shape_AW"))%>%
-  drop_na()%>%
-  filter(across(where(is.numeric), is.finite))
-
-
-measure_cols <- colnames(df_NoLA[,7:19])
-df_NoLA <-  df_NoLA  %>%  
-  mutate(across(all_of(measure_cols), 
-                ~ log(.x/exp(mean(log(.x)))), 
-                .names = "shape_ratio_{.col}"))
-
-```
-
+Example:
 ```{r}
 
-df_ori <- df_NoLA[,7:19]
-df_log <- log(df_NoLA[,7:19])
-df_log_shape_ratio <- df_NoLA[,21:33]
-df_log_shape_ration_gm <- df_NoLA[,36:48]
-mod1 <- Mclust(df_ori,G=1:12)
-summary(mod1)
-mod2 <- Mclust(df_log,G=1:12)
-summary(mod2)
-mod3 <- Mclust(df_log_shape_ratio,G=1:12)
-summary(mod3)
-mod4 <- Mclust(df_log_shape_ration_gm,G=1:12)
-summary(mod4)
+data(iris)
+
+# split data
+set.seed(42)
+
+trainIndex <- sample(1:nrow(iris), 0.8 * nrow(iris))
+
+trainData <- iris[trainIndex, ]
+testData <- iris[-trainIndex, ]
+
+# train model
+rf_model <- randomForest(Species ~ ., data = trainData)
+print(rf_model)
 ```
+
+Evaluate the model:
+```{r}
+library(caret)
+predictions <- predict(rf_model, testData)
+confusionMatrix(predictions, testData$Species)
+
+# Hyperparameter Tuning
+#ntree: The number of trees to grow in the forest. A higher number of trees usually results in better performance.
+#mtry: The number of features to consider for each split. Tuning this parameter can help achieve a better balance between bias and variance.
+rf_tuned <- randomForest(Species ~ ., data = trainData, ntree = 500, mtry = 2)
+print(rf_tuned)
+```
+
+result intepretation
+```{r}
+importance(rf_model)
+varImpPlot(rf_model)
+```
+
+# with ctenophore dataset
 
 ```{r}
-p <- fviz_mclust(mod1,"classification",  geom = "point" ) +
-#scale_shape_manual(values = c(16,0,17,8))
-scale_color_manual(values = palette3)+
-scale_fill_manual( values = palette3)
-p2 <- fviz_mclust(mod2,"classification",  geom = "point" ) +
-#scale_shape_manual(values = c(16,0,17,8))
-scale_color_manual(values = palette3)+
-scale_fill_manual( values = palette3)
-p3 <- fviz_mclust(mod3,"classification",  geom = "point" ) +
-#scale_shape_manual(values = c(16,0,17,8))
-scale_color_manual(values = palette3)+
-scale_fill_manual( values = palette3)
-p4 <- fviz_mclust(mod4,"classification",  geom = "point" ) +
-#scale_shape_manual(values = c(16,0,17,8))
-scale_color_manual(values = palette3)+
-scale_fill_manual( values = palette3)
-pGMM <- ggarrange(p, p2, p3,p4, nrow = 2, ncol = 2,common.legend = TRUE)
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/tatb_vs_centroid.svg", plot=pp1)
-#ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p)
+set.seed(42)
+df_input <- df_gmm_export[,c(20:32,34)]
+df_input$stage <- as.factor(df_input$stage)
+df_input <- df_input[,-9]
+trainIndex <- sample(1:nrow(df_input), 0.8 * nrow(df_input))
+
+trainData <- df_input[trainIndex, ]
+testData <- df_input[-trainIndex, ]
 ```
+
+## model fitting
+```{r}
+rf_model <- randomForest(stage ~ ., data = trainData)
+print(rf_model)
+```
+
+## model fitting
+```{r}
+predictions <- predict(rf_model, testData)
+confusionMatrix(predictions, testData$stage)
+```
+
+## Hyperparameter tuning
 
 ```{r}
-centroids_3 <- mod3$parameters$mean
+rf_tuned <- randomForest(stage ~ ., data = trainData, ntree = 1000, mtry = 3)
+print(rf_tuned)
 ```
 
-
+## result interpretation
 ```{r}
-n_clusters <- mod3$G
-indices_of_exemplars <- c()
-
-# 2. Loop through each cluster
-for (i in 1:n_clusters) {
-  
-  # Get the mathematical centroid for this cluster
-  center <- mod3$parameters$mean[, i]
-  
-  # Identify which rows belong to this cluster
-  cluster_rows <- which(mod3$classification == i)
-  
-  # Calculate distance from each row in the cluster to the centroid
-  # We use the original data (df_ori) for the distance calculation
-  distances <- apply(df_ori[cluster_rows, , drop = FALSE], 1, function(x) {
-    sum((x - center)^2)
-  })
-  
-  # Find the index of the minimum distance
-  exemplar_index <- cluster_rows[which.min(distances)]
-  
-  # Store it
-  indices_of_exemplars[i] <- exemplar_index
-}
-
-# 3. Create a summary table of the representative specimens
-representative_specimens <- df_NoLA[indices_of_exemplars, ]
-print(representative_specimens)
+importance(rf_model)
+varImpPlot(rf_model)
 ```
 
-```{r}
-#ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p)
-
-pca <- prcomp(scale(mod4$data))
-fviz_contrib(pca, choice = "var", axes = 1, top = 10)
-fviz_contrib(pca, choice = "var", axes = 2, top = 10)
-fviz_contrib(pca, choice = "var", axes = 3, top = 10)
-
-```
-
-construct the plot after selecting the variables
-```{r}
-#out1 <- clustvarsel(df_ori)
-#mod1_1 <-Mclust(df_ori[, out1$subset])
-#summary(mod1_1)
-#fviz_mclust(mod1_1,"classification",  geom = "point" ) 
-
-```
-
-```{r}
-library(ggalluvial)
-
-
-df_NoLA <- df_iso %>% ungroup()%>%
-dplyr::select(-c("ALO", "AW", "LTM", "LL","shape_LL","shape_LTM","shape_ALO","shape_AW"))%>%
-drop_na()%>%
-filter(across(where(is.numeric), is.finite))
-
-df_NoLA$cluster <- as.factor(mod1$classification)
-df_NoLA$cluster_log <- as.factor(mod2$classification)
-df_NoLA$cluster_shape <- as.factor(mod3$classification)
-
-ggplot(df_NoLA, aes(x = log(centroid), y = log(TABW), color = cluster_shape)) +
-geom_point(size = 1) +
-theme_classic()
-#scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
-```
-
-
-
-```{r}
-g_plot <- ggplot(df_NoLA,
-aes(axis1 = cluster_shape, axis2 = stage, y = ..count..)) +
-geom_alluvium(aes(fill = cluster_shape)) +
-geom_stratum() +
-theme_classic() +
-labs(x = "Classification Method",
-y = "Number of images")
-#scale_fill_manual(values = c("#343434","#3880ba","#a4cdee"))
-g_plot
-#ggsave(file="D:/202603-dev-seq-analysis/fig/ggalluvial.svg", plot=g_plot)
-```
-
-## Regression
-
-
-```{r}
-library("RRPP")
-
-# Create a matrix of shape variables
-shape_matrix <- df_iso %>% ungroup()%>%
-  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
-  dplyr::select(starts_with("shape_")) %>%
-  drop_na() %>%
-   filter(across(where(is.numeric), is.finite)) %>% 
-  as.matrix()
-
-shape_matrix
-
-df_temp <- df_iso %>% ungroup()%>%
-  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
-  drop_na()%>%
-   filter(across(where(is.numeric), is.finite))
-
-nrow(shape_matrix)
-nrow(df_temp)
-
-# Add the centroid back to a clean modeling data frame
-model_data <- rrpp.data.frame(
-  centroid = df_temp$centroid,
-  coords = shape_matrix,
-  temp = as.factor(df_temp$temp),
-  age = df_temp$exp_day,
-  biorep = df_temp$biorep
-)
-#any(!is.finite(shape_matrix)) # Should be FALSE
-#table(model_data$temp)
-fit <- lm.rrpp(coords ~ log(centroid)*temp*age, SS.type = "I", 
-data = model_data, print.progress = FALSE, iter = 999)
-summary(fit)
-anova(fit)
-```
-
-```{r}
-library(lme4)
-library(lmerTest)
-pca_shape <- prcomp(df_log_shape_ratio, scale. = TRUE)
-summary(pca_shape)
-
-pc1_scores <- pca_shape$x[, 1]
-
-standard_df <- data.frame(
-  pc1   = pc1_scores,
-  centroid = df_NoLA$centroid,
-  temp     = df_NoLA$temp,
-  age      = df_NoLA$exp_day,
-  biorep   = df_NoLA$biorep
-)
-
-# Run the model again
-model <- lmer(pc1 ~ log(centroid) * temp * age + (1 | biorep),
-              data = standard_df)
-summary(model)
-anova(model)
-```
-
-```{r}
-library(ggfortify)
- pca1 <- prcomp(df_NoLA[,21:33])
-summary(pca1)
-autoplot(pca1,data = df_NoLA, colour = 'stage',frame = TRUE, frame.type = 'norm')
-```
-```{r}
-
-fviz_contrib(pca1, choice = "var", axes = 1, top = 10)
-fviz_contrib(pca, choice = "var", axes = 2, top = 10)
-fviz_contrib(pca, choice = "var", axes = 3, top = 10)
-```
-```{r}
-df_export <- df_NoLA %>%
-  select(sample_id, date_obj, cluster, cluster_log, cluster_shape)
-
-df_export <- df_raw %>%
-  left_join(df_export, by = c("sample_id" = "sample_id", "date_obj" = "date_obj"))%>%
-  select(sample_id, ind, plane, temp, file, date_obj, cluster, cluster_log, cluster_shape)
-```
-
-```{r}
-
-write.csv(df_export, "/Volumes/Yinghui/202603-dev-seq-analysis/clustering_result.csv", row.names = FALSE)
-```
-
-```{r}
-saveRDS(df_NoLA, file = "/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
-```
