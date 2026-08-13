@@ -85,7 +85,7 @@ lda_con <- ggplot(df_coefs, aes(x = reorder(Feature, Abs_LD1), y = LD1, fill = L
   )
 
 lda_con
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
 ```
 plot
 ```{r}
@@ -116,7 +116,7 @@ lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) +
   coord_fixed(ratio=1)+
   theme_classic()# keep the unit scaling of the plot fixed at 1
 lda_plot
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot.svg", plot=lda_plot)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot.svg", plot=lda_plot)
 ```
 ```{r}
 ggplot(stg.CV, aes(x = LD1)) +
@@ -148,7 +148,7 @@ lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) +
   coord_fixed(ratio=1)+
   theme_classic()# keep the unit scaling of the plot fixed at 1
 lda_plot
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_cluster.svg", plot=lda_plot)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_cluster.svg", plot=lda_plot)
 ```
 
 
@@ -194,21 +194,29 @@ df_gmm_export[min_idx,]
 max_idx <- which.max(pca$x[, 2])
 df_gmm_export[max_idx,]
 ```
-
 ```{r}
 #ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution1.svg", plot=con1)
 #ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution2.svg", plot=con2)
 ```
 
-```{r}
-# Custom function for row-wise geometric mean
-#rowGeometricMeans <- function(data, na.rm = TRUE) {
-#  exp(rowMeans(log(data), na.rm = na.rm))
-#}
+## PCA identify outliers
+### standard way
 
-#df_NoLA <- df_NoLA %>%
-#  mutate(t_centroid = rowGeometricMeans(pick(all_of(measure_cols)), na.rm = TRUE))
+```{r}
+# remotes::install_github("privefl/bigutilsr")
+library(bigutilsr)
+U <- pca$x
+#theme_set(bigstatsr::theme_bigstatsr(0.8))
+# qplot(U[, 1], U[, 2]) + coord_equal()
+# Standard outlier detection:
+# criterion of being “more than 6 standard deviations away from the mean”.
+
+outlier_idx <- unique(unlist(apply(U, 2, function(x) which(abs(x - mean(x)) > (6 * sd(x))))))
+col <- rep("black", nrow(U))
+col[outlier_idx] <- "red"
+qplot(U[, 1], U[, 2], color = I(col), size = I(2)) + coord_equal()
 ```
+
 
 ```{r}
 df_plot <-df_NoLA %>%
@@ -219,8 +227,22 @@ ggplot(df_plot, aes(x = t_centroid, y = resPC1, color = stage)) +
   geom_point() +
   theme_classic() + labs(x = "size", y = "PC1 score")
 ```
+###Robust Mahalanobis distance
+```{r}
 
-### perform PCA on the residuals
+```
+
+### using packages
+
+```{r}
+library(mdatools)
+# 1. Fit mdatools PCA model and assign to 'm'
+m <- mdatools::pca(df_test[1:12], scale = TRUE, ncomp = 4)
+
+# 2. Pass 'm' to plotContributions
+plotDistances(m, show.labels = TRUE)
+```
+## perform PCA on the residuals
 
 
 ```{r}

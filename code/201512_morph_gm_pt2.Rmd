@@ -3,9 +3,6 @@ knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
 
 source("data_import.R")
-source("PA_measurement.R")
-source("TA_measurement.R")
-source("OA_measurement.R")
 ```
 
 ```{r}
@@ -42,7 +39,13 @@ df <- lapply(files, readRDS) %>% bind_rows()
 
 Make sure the landmarks used is the same as the df_iso
 ```{r}
-df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+
+df_NoLA <- df_iso %>% 
+  dplyr::select(-c("ALO", "AW", "LTM", "LL", "sd_LL","sd_LTM","sd_ALO","sd_AW"))%>%
+  drop_na() %>%
+  filter(if_all(where(is.numeric),  ~ is.finite(.x) & .x != 0))
 ```
 
 ```{r}
@@ -51,7 +54,7 @@ df <- df %>%
     date_string = str_extract(basename(file), "^\\d{4}"),
     date_obj = ymd(paste0("2025", date_string))
   ) %>%
-  select(-date_string)
+  dplyr::select(-date_string)
 ```
 
 ```{r}
@@ -382,4 +385,26 @@ legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 bwgPCA_stage=groupPCA(gpaPA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
 plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
 legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+```{r}
+# Find row indices of maximum PC1 and PC2
+max_pc1_idx <- which.max(bwgPCA_stage$Scores[, 1])
+min_pc2_idx <- which.min(bwgPCA_stage$Scores[, 2])
+
+```
+
+### PCA
+```{r}
+PCA_PA <- gm.prcomp(gpaPA$coords)
+plot(PCA_PA)
+```
+
+```{r}
+# # Identify the index for PC1 extremes
+pc1_max_idx <- which.max(PCA_PA$x[, 1])
+pc1_min_idx <- which.min(PCA_PA$x[, 1])
+
+# Identify the index for PC2 extremes
+pc2_max_idx <- which.max(PCA_PA$x[, 2])
+pc2_min_idx <- which.min(PCA_PA$x[, 2])
 ```

@@ -143,6 +143,15 @@ p4
 #ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p3)
 ```
 
+```{r}
+min_idx <- which.min(pca$x[, 1])
+df_gmm_export[min_idx,]
+
+max_idx <- which.max(pca$x[, 2])
+df_gmm_export[max_idx,]
+```
+
+
 Finding representing specimens
 
 ```{r}

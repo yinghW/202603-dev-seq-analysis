@@ -153,7 +153,7 @@ standard:
 ALO 0.07mm
 AW 0.07mm
 LTM 0.05mm
-LL 0.07mm
+LL 0.07mm or LTM is NA
 ```{r}
 df_lm <- df_lm %>% 
   mutate(value = case_when(
@@ -161,11 +161,35 @@ df_lm <- df_lm %>%
     measure_name == "LTM"  & value < 0.05 ~ NA_real_,
     
     # Rule for ALO, AW, LL (Threshold 0.07)
-    measure_name %in% c("ALO", "AW", "LL") & value < 0.07 ~ NA_real_,
+    measure_name %in% c("ALO", "AW","LL") & value < 0.07 ~ NA_real_,
     
     # Keep everything else as is
     TRUE ~ value
-  ))
+  )) 
+```
+
+removing LL if LTM is NA
+```{r}
+df_lm <- df_lm %>% 
+  group_by(sample_id, ind, temp,biorep) %>%
+  mutate(ltm_is_na = any(measure_name == "LTM" & is.na(value)),
+         value = case_when(measure_name == "LL"  & ltm_is_na ~ NA_real_,
+    # Keep everything else as is
+    TRUE ~ value))%>% 
+  dplyr::select(-ltm_is_na)%>%
+  ungroup()
+```
+
+removing LTM if LL is NA
+```{r}
+df_lm <- df_lm %>% 
+  group_by(sample_id, ind, temp,biorep) %>%
+  mutate(ll_is_na = any(measure_name == "LL" & is.na(value)),
+         value = case_when(measure_name == "LTM"  & ll_is_na ~ NA_real_,
+    # Keep everything else as is
+    TRUE ~ value))%>% 
+  dplyr::select(-ll_is_na)%>%
+  ungroup()
 ```
 
 convert the sample_id to date
