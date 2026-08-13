@@ -219,72 +219,73 @@ plot by individual
 
 ## plot all measurements together on body length
 ```{r}
-p1 <- ggplot(df_lmw, aes(x = log(BL), y = log(TABW))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p1 <- ggplot(df_lmw, aes(x = BL, y = TABW)) +
+  geom_smooth( linewidth = 1) +
   geom_point()
 p1
 
 p2 <- ggplot(df_lmw, aes(x = BL, y = AW)) +
-  geom_smooth(method = "lm", linewidth = 1) +
+  geom_smooth(linewidth = 1) +
   geom_point(aes(color = sample_id))+
   theme(legend.position = "none")
 p2
 
-p3 <- ggplot(df_lmw, aes(x = log(BL), y = log(PABW))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p3 <- ggplot(df_lmw, aes(x = BL, y = PABW)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p3
 
-p4 <- ggplot(df_lmw, aes(x = log(BL), y = log(AEAC))) +
+p4 <- ggplot(df_lmw, aes(x = BL, y = AEAC)) +
   geom_smooth(method = "lm", linewidth = 1) +
   geom_point()
 p4
 
-p5 <- ggplot(df_lmw, aes(x = log(BL), y = log(AECL))) +
+p5 <- ggplot(df_lmw, aes(x = BL, y = AECL)) +
   geom_smooth(method = "lm", linewidth = 1) +
   geom_point()
 p5
 
-p6 <- ggplot(df_lmw, aes(x = log(BL), y = log(ATAC))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p6 <- ggplot(df_lmw, aes(x = BL, y = ATAC)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p6
-p7 <- ggplot(df_lmw, aes(x = log(BL), y = log(ATCL))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+
+p7 <- ggplot(df_lmw, aes(x = BL, y = ATCL)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p7
 
-p8 <- ggplot(df_lmw, aes(x = log(BL), y = log(LL))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p8 <- ggplot(df_lmw, aes(x = BL, y = LL)) +
+  geom_smooth( linewidth = 1) +
   geom_point()
 p8
 
-p9 <- ggplot(df_lmw, aes(x = log(BL), y = log(LTM))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p9 <- ggplot(df_lmw, aes(x = BL, y = LTM)) +
+  geom_smooth( linewidth = 1) +
   geom_point()
 p9
 
-p10 <- ggplot(df_lmw, aes(x = log(BL), y = log(PL))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p10 <- ggplot(df_lmw, aes(x = BL, y = PL)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p10
 
-p11 <- ggplot(df_lmw, aes(x = log(BL), y = log(PW))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p11 <- ggplot(df_lmw, aes(x = BL, y = PW)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p11
 
-p12 <- ggplot(df_lmw, aes(x = log(BL), y = log(TATB))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p12 <- ggplot(df_lmw, aes(x = BL, y = TATB)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p12
 
-p13 <- ggplot(df_lmw, aes(x = log(BL), y = log(TBL))) +
-  geom_smooth(method = "lm", linewidth = 1) +
+p13 <- ggplot(df_lmw, aes(x = BL, y = TBL)) +
+  geom_smooth(linewidth = 1) +
   geom_point()
 p13
 
-p14 <- ggplot(df_lmw, aes(x = log(BL), y = log(TCL))) +
+p14 <- ggplot(df_lmw, aes(x = BL, y = TCL)) +
   geom_smooth(method = "lm", linewidth = 1) +
   geom_point()
 p14
@@ -528,5 +529,9 @@ p15 <- ggplot(df_iso, aes(x = log(centroid), y = shape_TABW)) +
   geom_smooth(method = "lm", linewidth = 1) +
   geom_point()
 p15
+
+```
+
+```{r}
 
 ```

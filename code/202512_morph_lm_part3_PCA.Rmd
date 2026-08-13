@@ -7,10 +7,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
 
-source("data_import.R")
-source("PA_measurement.R")
-source("TA_measurement.R")
-source("OA_measurement.R")
 ```
 
 ```{r}
@@ -184,9 +180,10 @@ pca.plot
 ```{r}
 con1 <- fviz_contrib(pca, choice = "var", axes = 1, top = 10)
 con2 <- fviz_contrib(pca, choice = "var", axes = 2, top = 10)
+con1
 fviz_contrib(pca, choice = "var", axes = 3, top = 10)
 ```
-identify the min and max point of PC1 to check for outliers
+identify the min and max point of PC1 and pc2
 ```{r}
 min_idx <- which.min(pca$x[, 1])
 df_gmm_export[min_idx,]
@@ -232,7 +229,7 @@ ggplot(df_plot, aes(x = t_centroid, y = resPC1, color = stage)) +
 
 ```
 
-### using packages
+### using packages that based on Mahalanobis distance
 
 ```{r}
 library(mdatools)

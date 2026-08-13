@@ -8,9 +8,6 @@ knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
 
 source("data_import.R")
-source("PA_measurement.R")
-source("TA_measurement.R")
-source("OA_measurement.R")
 ```
 
 ```{r}
