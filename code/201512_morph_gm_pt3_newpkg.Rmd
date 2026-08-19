@@ -52,7 +52,9 @@ df <- lapply(files, readRDS) %>% bind_rows()
 
 Make sure the landmarks used is the same as the df_iso
 ```{r}
-df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+df_gmm_export<- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
+
 ```
 
 ```{r}
@@ -67,7 +69,7 @@ df <- df %>%
 ```{r}
 df_matched <- inner_join(
   df, 
-  df_NoLA, 
+  df_gmm_export, 
   by = c("date_obj", "temp", "ind","biorep")
 )
 ```
@@ -129,10 +131,10 @@ plotAllSpecimens(gpaOA$coords)
 ###CVA
 
 ```{r}
-CVA_stage=CVA(gpaOA$coords, df_NoLA$stage, weighting = TRUE,
+CVA_stage=CVA(gpaOA$coords, df_gmm_export$stage, weighting = TRUE,
 	plot = TRUE, rounds = 1000, cv = TRUE)
 CVA_stage
-stage <- as.factor(df_NoLA$stage)
+stage <- as.factor(df_gmm_export$stage)
 plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
      col = stage,
      xlab = "CV1", ylab = "CV2")
@@ -144,7 +146,7 @@ legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 ```{r}
 shapes <- gpaOA$coords
 
-lks <- list(c(2,3), c(4,5), c(6,7))
+lks <- list(c(4,5), c(6,7))
 
 # Generate morphospace
 mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
@@ -291,10 +293,10 @@ plotAllSpecimens(gpaTA$coords)
 ```
 
 ```{r}
-CVA_stage=CVA(gpaTA$coords, df_NoLA$stage, weighting = TRUE,
+CVA_stage=CVA(gpaTA$coords, df_gmm_export$stage, weighting = TRUE,
 	plot = TRUE, rounds = 1000, cv = TRUE)
 CVA_stage
-stage <- as.factor(df_NoLA$stage)
+stage <- as.factor(df_gmm_export$stage)
 plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
      col = stage,
      xlab = "CV1", ylab = "CV2")
@@ -344,12 +346,22 @@ gpaTA_2 <- gpagen(ta_final_points)
 
 ```{r}
 shapes <- gpaTA_2$coords
-#stage <- df_NoLA$stage
+#stage <- df_gmm_export$stage
 #lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
 lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
 
 # Generate morphospace
 mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
+```
+```{r}
+CVA_stage=CVA(gpaTA_2$coords, df_gmm_export$stage, weighting = TRUE,
+	plot = TRUE, rounds = 1000, cv = TRUE)
+CVA_stage
+stage <- as.factor(df_gmm_export$stage)
+plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
+     col = stage,
+     xlab = "CV1", ylab = "CV2")
+legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 ```
 
 ```{r}
@@ -419,18 +431,45 @@ plotAllSpecimens(gpaPA$coords)
 ### LDA
 
 ```{r}
-CVA_stage=CVA(gpaPA$coords, df_NoLA$stage, weighting = TRUE,
+CVA_stage=CVA(gpaPA$coords, df_gmm_export$stage, weighting = TRUE,
 	plot = TRUE, rounds = 1000, cv = TRUE)
 CVA_stage
-stage <- as.factor(df_NoLA$stage)
+stage <- as.factor(df_gmm_export$stage)
 plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
      col = stage,
      xlab = "CV1", ylab = "CV2")
 legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+```{R}
+df <- data.frame(cv1 = CVA_stage$CVscores[,1], stage = stage)
+# Find the exact row with the minimum CV1 in the early_transition stage
+leftmost_purple <- df %>%
+  mutate(original_row = row_number()) %>%
+  filter(stage == "early_transition") %>%
+  slice_max(cv1, n = 1)
+leftmost_purple$original_row
 ```
 ### between-group PCA
 ```{r}
 bwgPCA_stage=groupPCA(gpaPA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
 plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
 legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+```
+
+### PA without auricle landmarks
+with landmarks 6,7 related to lobe removed 
+```{r}
+pa_final_points <- pa_3d_array[c(3,4,5,6,7,8) , ,]
+gpaTA_2 <- gpagen(ta_final_points)
+```
+### morphospace
+
+```{r}
+shapes <- gpaTA_2$coords
+#stage <- df_NoLA$stage
+#lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
+lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
+
+# Generate morphospace
+mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
 ```

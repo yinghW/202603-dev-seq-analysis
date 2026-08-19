@@ -49,7 +49,7 @@ df_gmm_export <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_e
 #df_NoLA[,7:19]
 #df_NoLA[,20:32], lm standardized by volume and logged
 #df_NoLA[,39:51]
-
+#df_gmm_export[,20:32]
 df_test <-df_gmm_export[,20:32] %>% 
   mutate (stage = df_gmm_export$stage) %>% 
   dplyr::select(-c("sd_BL"))
@@ -81,7 +81,7 @@ lda_con <- ggplot(df_coefs, aes(x = reorder(Feature, Abs_LD1), y = LD1, fill = L
   )
 
 lda_con
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
 ```
 plot
 ```{r}
@@ -112,7 +112,7 @@ lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) +
   coord_fixed(ratio=1)+
   theme_classic()# keep the unit scaling of the plot fixed at 1
 lda_plot
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot.svg", plot=lda_plot)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_stage.svg", plot=lda_plot)
 ```
 ```{r}
 ggplot(stg.CV, aes(x = LD1)) +
@@ -144,7 +144,7 @@ lda_plot <-  ggplot(stg.CV, aes(x = LD1, y = LD2)) +
   coord_fixed(ratio=1)+
   theme_classic()# keep the unit scaling of the plot fixed at 1
 lda_plot
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_cluster.svg", plot=lda_plot)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_plot_BL_standardized_cluster.svg", plot=lda_plot)
 ```
 
 
@@ -171,10 +171,11 @@ pca<- prcomp(df_test[,1:12],
 library(ggfortify)
 pca.plot <- autoplot(pca,
                           data = df_test,
-                          colour = 'stage')
+                          colour = 'stage')+
+  theme_classic()
 
 pca.plot
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca.plot.svg", plot=pca.plot)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_stage.svg", plot=pca.plot)
 ```
 
 ```{r}
@@ -192,8 +193,8 @@ max_idx <- which.max(pca$x[, 2])
 df_gmm_export[max_idx,]
 ```
 ```{r}
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution1.svg", plot=con1)
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/contribution2.svg", plot=con2)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_contribution1.svg", plot=con1)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_contribution2.svg", plot=con2)
 ```
 
 ## PCA identify outliers

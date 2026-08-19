@@ -135,7 +135,7 @@ scale_fill_manual( values = palette3)
 p3
 p4
 #pGMM <- ggarrange(p, p2, p3,p4, nrow = 2, ncol = 2,common.legend = TRUE)
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_standardized_cluster_result.svg", plot=p3)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_standardized_cluster_result.svg", plot=p3)
 #ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_sd_log.svg", plot=p4)
 #ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p3)
 ```
@@ -169,8 +169,8 @@ for (i in 1:n_clusters) {
   cluster_rows <- which(mod3$classification == i)
   
   # Calculate distance from each row in the cluster to the centroid
-  # We use the original data (df_ori) for the distance calculation
-  distances <- apply(df_ori[cluster_rows, , drop = FALSE], 1, function(x) {
+  # use the original data for the distance calculation
+  distances <- apply(df_ratio[cluster_rows, , drop = FALSE], 1, function(x) {
     sum((x - center)^2)
   })
   
@@ -184,6 +184,22 @@ for (i in 1:n_clusters) {
 # 3. Create a summary table of the representative specimens
 representative_specimens <- df_NoLA[indices_of_exemplars, ]
 print(representative_specimens)
+```
+```{r}
+library(RColorBrewer)
+n <- 60
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+pie(rep(1,n), col=sample(col_vector, n))
+```
+individual composition for each cluster
+
+```{r}
+ggplot(df_NoLA, aes(x = factor(cluster_shape), fill = sample_id)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = col_vector)+
+  theme_classic()
 ```
 
 ```{r}
@@ -208,17 +224,12 @@ construct the plot after selecting the variables
 library(ggalluvial)
 
 
-df_NoLA <- df_iso %>% ungroup()%>%
-dplyr::select(-c("ALO", "AW", "LTM", "LL","shape_LL","shape_LTM","shape_ALO","shape_AW"))%>%
-drop_na()%>%
-filter(across(where(is.numeric), is.finite))
-
-df_NoLA$cluster <- as.factor(mod1$classification)
-df_NoLA$cluster_log <- as.factor(mod2$classification)
+#df_NoLA$cluster <- as.factor(mod1$classification)
+#df_NoLA$cluster_log <- as.factor(mod2$classification)
 df_NoLA$cluster_shape <- as.factor(mod3$classification)
-df_NoLA$cluster_shape_gm <- as.factor(mod4$classification)
+df_NoLA$cluster_shape_ratio <- as.factor(mod4$classification)
 
-ggplot(df_NoLA, aes(x = log(vol), y = log(TABW), color = cluster_shape)) +
+ggplot(df_NoLA, aes(x = BL, y = TABW, color = cluster_shape)) +
 geom_point(size = 1) +
 theme_classic()
 #scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
@@ -247,26 +258,33 @@ g_plot
 library("RRPP")
 
 # Create a matrix of shape variables
-shape_matrix <- df_iso %>% ungroup()%>%
-  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
-  dplyr::select(starts_with("shape_")) %>%
+shape_matrix<- df_iso %>% ungroup()%>%
+  dplyr::select(-c("LL","LTM","ALO","AW","BL","sd_BL"))%>%
+  dplyr::select(starts_with("sd_")) %>%
   drop_na() %>%
-   filter(across(where(is.numeric), is.finite)) %>% 
+   filter(if_any(where(is.numeric), is.finite)) %>% 
   as.matrix()
 
-shape_matrix
+shape_matrix <- df_iso %>% ungroup()%>%
+  dplyr::select(-c("LL","LTM","ALO","AW"))%>%
+  drop_na() %>%
+  dplyr::select(7:19)%>%
+   filter(if_any(where(is.numeric), is.finite)) %>% 
+  as.matrix()
+
+#shape_matrix
 
 df_temp <- df_iso %>% ungroup()%>%
   dplyr::select(-c("LL","LTM","ALO","AW"))%>%
   drop_na()%>%
-   filter(across(where(is.numeric), is.finite))
+   filter(if_any(where(is.numeric), is.finite))
 
 nrow(shape_matrix)
 nrow(df_temp)
 
-# Add the centroid back to a clean modeling data frame
+# Add the body length back to a clean modeling data frame
 model_data <- rrpp.data.frame(
-  vol = df_temp$vol,
+  BL = df_temp$BL,
   coords = shape_matrix,
   temp = as.factor(df_temp$temp),
   age = df_temp$exp_day,
@@ -274,7 +292,7 @@ model_data <- rrpp.data.frame(
 )
 #any(!is.finite(shape_matrix)) # Should be FALSE
 #table(model_data$temp)
-fit <- lm.rrpp(coords ~ log(vol)*temp*age, SS.type = "I", 
+fit <- lm.rrpp(coords ~ log(BL)*temp*age, SS.type = "I", 
 data = model_data, print.progress = FALSE, iter = 999)
 summary(fit)
 anova(fit)
