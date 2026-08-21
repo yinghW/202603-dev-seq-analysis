@@ -78,6 +78,11 @@ palette1 <- c("#343434","#A3CEF1","#3880ba","#224f73","#000000","#CCCAC2","#837D
 palette2 = c("#f1eef6","#d0d1e6","#a6bddb","#74a9cf","#3690c0",
 "#0570b0","#034e7b")
 palette3 = c("#E8F0F8FF", "#D8D8E8FF", "#C0C0D0FF", "#70B0E8FF", "#6088C0FF", "#406898FF", "#283858FF", "#000000FF", "#A8B0C0FF", "#808090FF", "#A8D0F8FF", "#802008FF")
+# colorblind friendly
+# for stages
+palette4 <- c("#CC79A7","#009E73","#56B4E9","#F0E442","#0072B2","#D55E00", "#E69F00")
+# for cluster
+palette5 <- c("#F57DBF","#0DE0A7","#33AFF5", "#FCEE2D","#005F94","#FA6E00","#FFB91C")
 ```
 
 #linear measurements

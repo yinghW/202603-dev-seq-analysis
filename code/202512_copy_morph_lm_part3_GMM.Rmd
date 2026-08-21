@@ -6,8 +6,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
-
-source("data_import.R")
 ```
 
 ```{r}
@@ -37,6 +35,7 @@ df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
 ```
 
 
+
 ## GMM
 
 if only considering shape (because there are temperature as factor, so measurements not normalized by size / body length is not appropriate)
@@ -55,6 +54,13 @@ measure_cols <- colnames(df_NoLA[,7:19])
 #                ~ log(.x/exp(mean(log(.x)))), 
 #                .names = "shape_ratio_{.col}"))
 
+```
+
+### remove weird individual
+```{r}
+length(unique(df_NoLA$sample_id))
+df_NoLA <- df_NoLA  %>% filter(sample_id != "1-18-202510-dev-seq-A")
+length(unique(df_NoLA$sample_id))
 ```
 
 ```{r}
@@ -110,8 +116,6 @@ summary(mod4)
 ```
 
 ```{r}
-
-palette3 <- c( "#C0C0D0FF", "#70B0E8FF", "#6088C0FF", "#406898FF", "#283858FF", "#000000FF", "#A8B0C0FF", "#808090FF", "#A8D0F8FF", "#802008FF")
 #p <- fviz_mclust(mod1,"classification",  geom = "point" ) +
 #scale_shape_manual(values = c(16,0,17,8))
 #scale_color_manual(values = palette3)+
@@ -120,14 +124,14 @@ palette3 <- c( "#C0C0D0FF", "#70B0E8FF", "#6088C0FF", "#406898FF", "#283858FF", 
 #scale_shape_manual(values = c(16,0,17,8))
 #scale_color_manual(values = palette3)+
 #scale_fill_manual( values = palette3)
-p3 <- fviz_mclust(mod3,"classification",  geom = "point" ) 
+p3 <- fviz_mclust(mod3,"classification",  geom = "point" ) +
 #scale_shape_manual(values = c(16,0,17,8))
-#scale_color_manual(values = palette3)+
-#scale_fill_manual( values = palette3)
-p4 <- fviz_mclust(mod4,"classification",  geom = "point" ) 
+scale_color_manual(values = palette5)+
+scale_fill_manual( values = palette5)
+p4 <- fviz_mclust(mod4,"classification",  geom = "point" ) +
 #scale_shape_manual(values = c(16,0,17,8))
-#scale_color_manual(values = palette3)+
-#scale_fill_manual( values = palette3)
+scale_color_manual(values = palette5)+
+scale_fill_manual( values = palette5)
 #p5 <- fviz_mclust(mod5,"classification",  geom = "point" ) +
 #scale_shape_manual(values = c(16,0,17,8))
 #scale_color_manual(values = palette3)+
@@ -146,6 +150,14 @@ df_gmm_export[min_idx,]
 
 max_idx <- which.max(pca$x[, 2])
 df_gmm_export[max_idx,]
+```
+
+```{r}
+
+#df_NoLA$cluster <- as.factor(mod1$classification)
+#df_NoLA$cluster_log <- as.factor(mod2$classification)
+df_NoLA$cluster_shape <- as.factor(mod3$classification)
+df_NoLA$cluster_shape_ratio <- as.factor(mod4$classification)
 ```
 
 
@@ -219,31 +231,15 @@ num
 temp
 ```
 
-```{r}
-c <- c()
-
-for (i in 1:4){
-  c[i] <- length(unique(df_NoLA$sample_id))
-  
-}
-temp <- data.frame(cluster = as.factor(c(1,2,3,4)),
-                   number_of_individual = )
-
-#ggsave(file="D:/202603-dev-seq-analysis/fig/ggalluvial.svg", plot=g_plot)
-
-```
-
-
 ### identify contribution
 
 ```{r}
 #ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p)
-
+# red line: expected average contribution.
 pca <- prcomp(scale(mod3$data))
 fviz_contrib(pca, choice = "var", axes = 1, top = 10)
 fviz_contrib(pca, choice = "var", axes = 2, top = 10)
 fviz_contrib(pca, choice = "var", axes = 3, top = 10)
-
 ```
 
 construct the plot after selecting the variables
@@ -258,15 +254,11 @@ construct the plot after selecting the variables
 library(ggalluvial)
 
 
-#df_NoLA$cluster <- as.factor(mod1$classification)
-#df_NoLA$cluster_log <- as.factor(mod2$classification)
-df_NoLA$cluster_shape <- as.factor(mod3$classification)
-df_NoLA$cluster_shape_ratio <- as.factor(mod4$classification)
-
 ggplot(df_NoLA, aes(x = BL, y = TABW, color = cluster_shape)) +
 geom_point(size = 1) +
+scale_color_manual(values = palette5)+
+#geom_smooth()+
 theme_classic()
-#scale_color_manual(values = c("#343434","#ccc9c1","#a4cdee","#3880ba"))
 ```
 
 

@@ -438,14 +438,14 @@ stage <- as.factor(df_gmm_export$stage)
 plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
      col = stage,
      xlab = "CV1", ylab = "CV2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+legend('topright',  col = 1:4, cex = 0.8, pch = 1)
 ```
 ```{R}
-df <- data.frame(cv1 = CVA_stage$CVscores[,1], stage = stage)
+df <- data.frame(cv1 = CVA_stage$CVscores[,2], stage = stage)
 # Find the exact row with the minimum CV1 in the early_transition stage
 leftmost_purple <- df %>%
   mutate(original_row = row_number()) %>%
-  filter(stage == "early_transition") %>%
+  filter(stage == "late_transition") %>%
   slice_max(cv1, n = 1)
 leftmost_purple$original_row
 ```

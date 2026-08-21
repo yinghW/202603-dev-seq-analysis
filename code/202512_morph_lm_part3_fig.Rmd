@@ -6,8 +6,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
-
-
 ```
 
 ```{r}
@@ -88,19 +86,21 @@ df_NoLA_20 %>%
 
 day_stage <- ggplot(df_NoLA_20,aes(x = exp_day, y = BL)) +
   # Scatter plot points
-  geom_point(size = 1, alpha = 0.5, aes(color =stage)) +
-  geom_smooth(alpha = 0.1, size = 1) +
+  geom_point(size = 1,  aes(color =stage)) +
+  scale_color_manual(values = palette4)+
+  geom_smooth(alpha = 0.1, size = 1, color = "#343434") +
   theme_classic()
 day_stage
 
 day_cluster <- ggplot(df_NoLA_20,aes(x = exp_day, y = BL)) +
   # Scatter plot points
-  geom_point(size = 1, alpha = 0.5, aes(color =cluster_shape)) +
-  geom_smooth(alpha = 0.1, size = 1) +
+  geom_point(size = 1,  aes(color =cluster_shape)) +
+  scale_color_manual(values = palette5)+
+  geom_smooth(alpha = 0.1, size = 1, color = "#343434") +
   theme_classic()
 day_cluster
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_stage.svg", plot=day_stage)
-#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_cluster.svg", plot=day_cluster)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_stage.svg", plot=day_stage)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/day_vs_cluster.svg", plot=day_cluster)
 
 ```
 
@@ -108,13 +108,6 @@ day_cluster
 ```{r}
 library(segmented)
 measure_cols <- colnames(df_gmm_export[,7:20])
-# df_NoLA_sg <- df_NoLA %>%
-#  mutate(
-#    across(all_of(measure_cols), 
-#                ~ log(.x), 
-#                .names = "log_{.col}")
-#  )%>%
-#  mutate(log_vol = log(vol))
 
 model1 <- lm(TBL ~ BL, data = df_gmm_export)
 
@@ -122,21 +115,33 @@ segmented_model1 <- segmented(model1, seg.Z = ~BL)
 
 df_gmm_export$seg_preds1 <- predict(segmented_model1)
 
+m1_breaking_point <- segmented_model1$psi[,"Est."]
+
 pp1 <- ggplot(df_gmm_export, aes(x = BL, y = TBL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
-  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
+    scale_color_manual(values = palette5)+
+  geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line 
+  geom_vline(xintercept = m1_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
   theme_classic() +
-    labs(y = "TBL")
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
 
 pp2 <- ggplot(df_gmm_export, aes(x = BL, y = TBL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
+    scale_color_manual(values = palette4)+
   geom_line(aes(y = seg_preds1), color = "#343434", size = 1) + # Piecewise regression line
-  theme_classic() +
-    labs(y = "TBL")
+  geom_vline(xintercept = m1_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() 
+
+pp1_2 <- ggarrange(pp1,pp2,nrow = 2, align = 'v')
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/TBL_vs_BL.svg", plot=pp1_2)
 ```
 
+adtentacular arradial canal v.s. adesophageal arradial canal
 ```{r}
 model2 <- lm(ATAC ~ AEAC, data = df_gmm_export)
 
@@ -144,21 +149,28 @@ segmented_model2 <- segmented(model2, seg.Z = ~AEAC)
 
 df_gmm_export$seg_preds2 <- predict(segmented_model2)
 
+m2_breaking_point <- segmented_model2$psi[,"Est."]
+
 pp3 <- ggplot(df_gmm_export, aes(x = AEAC, y = ATAC, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
-  theme_classic() 
+      geom_vline(xintercept = m2_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() +
+theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
 
 pp4 <- ggplot(df_gmm_export, aes(x = AEAC, y = ATAC, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds2), color = "#343434", size = 1) + # Piecewise regression line
+    geom_vline(xintercept = m2_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
   theme_classic() 
 
-ggarrange(pp1,pp2, pp3,pp4,ncol = 2, nrow = 2)
+ggarrange(pp3,pp4,nrow = 2, align = 'v')
 ```
-
+tentacle canal length
 ```{r}
 model3 <- lm(TCL ~ BL, data = df_gmm_export)
 
@@ -166,17 +178,137 @@ segmented_model3 <- segmented(model3, seg.Z = ~BL)
 
 df_gmm_export$seg_preds3 <- predict(segmented_model3)
 
+m3_breaking_point <- segmented_model3$psi[,"Est."]
+
 pp5 <- ggplot(df_gmm_export, aes(x = BL, y = TCL, color = cluster_shape)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
-  theme_classic()
+    geom_vline(xintercept = m3_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic()+
+theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
 
 pp6 <- ggplot(df_gmm_export, aes(x = BL, y = TCL, color = stage)) +
   #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
     geom_point()+
   geom_line(aes(y = seg_preds3), color = "#343434", size = 1) + # Piecewise regression line
+    geom_vline(xintercept = m3_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
   theme_classic() 
+
+ggarrange(pp5,pp6,align = 'v', ncol = 1, nrow = 2)
+
+```
+
+```{r}
+model4 <- lm(PABW ~ BL, data = df_gmm_export)
+
+segmented_model4 <- segmented(model4, seg.Z = ~BL)
+
+df_gmm_export$seg_preds4 <- predict(segmented_model4)
+
+m4_breaking_point <- segmented_model4$psi[,"Est."]
+
+pp7 <- ggplot(df_gmm_export, aes(x = BL, y = PABW, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette5)+
+  geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m4_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() +
+theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+pp8 <- ggplot(df_gmm_export, aes(x = BL, y = PABW, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette4)+
+  geom_line(aes(y = seg_preds4), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m4_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() 
+
+pp7_8 <- ggarrange(pp7,pp8,align = 'v', ncol = 1, nrow = 2)
+pp7_8
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/TABW_vs_BL_piecewise_regression.svg", plot=pp7_8)
+```
+
+```{r}
+model5 <- lm(TABW ~ BL, data = df_gmm_export)
+
+segmented_model5 <- segmented(model5, seg.Z = ~BL)
+
+df_gmm_export$seg_preds5 <- predict(segmented_model5)
+
+m5_breaking_point <- segmented_model5$psi[,"Est."]
+
+pp9 <- ggplot(df_gmm_export, aes(x = BL, y = TABW, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette5)+
+  geom_line(aes(y = seg_preds5), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m5_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  #annotate("text", x = m5_breaking_point + 0.1, y = 9, label = "Transition Point", hjust = 0, color = "red") +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+pp10 <- ggplot(df_gmm_export, aes(x = BL, y = TABW, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette4)+
+  geom_line(aes(y = seg_preds5), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m5_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() 
+
+
+pp9_10 <- ggarrange(pp9,pp10,ncol = 1, nrow = 2,align = "v")
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/PABW_vs_BL_piecewise_regression.svg", plot=pp9_10)
+
+pp8 <- pp8 + theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+pp8_10 <- ggarrange(pp8,pp10,ncol = 1, nrow = 2,align = "v",common.legend = TRUE,legend = "right")
+pp8_10
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/BW_vs_BL_piecewise_regression.svg", plot=pp8_10)
+```
+
+tentacle bulb TA plane
+```{r}
+model6 <- lm(TATB ~ BL, data = df_gmm_export)
+
+segmented_model6 <- segmented(model6, seg.Z = ~BL)
+
+df_gmm_export$seg_preds6 <- predict(segmented_model6)
+
+m6_breaking_point <- segmented_model6$psi[,"Est."]
+
+pp11 <- ggplot(df_gmm_export, aes(x = BL, y = TATB, color = cluster_shape)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette5)+
+  geom_line(aes(y = seg_preds6), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m6_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  #annotate("text", x = m5_breaking_point + 0.1, y = 9, label = "Transition Point", hjust = 0, color = "red") +
+  theme_classic() + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+pp12 <- ggplot(df_gmm_export, aes(x = BL, y = TATB, color = stage)) +
+  #geom_point(color = "#3880ba", alpha = 0.8) +                # Scatter plot of raw data
+    geom_point()+
+  scale_color_manual(values = palette4)+
+  geom_line(aes(y = seg_preds6), color = "#343434", size = 1) + # Piecewise regression line
+  geom_vline(xintercept = m6_breaking_point, linetype = "dashed", color = "#343434", size = 0.8) +
+  theme_classic() 
+
+
+pp11_12 <- ggarrange(pp11,pp12,ncol = 1, nrow = 2,align = "v")
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/TATB_vs_BL_piecewise_regression.svg", plot=pp11_12)
+
 ```
 
 
