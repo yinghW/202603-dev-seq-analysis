@@ -31,7 +31,7 @@ Continuous measurements:
 - Body width (PABW) - the widest part of the body, excluding lobes, in the pharyngeal axial plane
 - Auricle length (ALO) - the length of the auricle starting from the aboral base side of the 
 - Auricle width (AW) - the oral end of the base of the auricle to the oral most ctene plate on the adesophageal ctene row
-- Position of widest point of the animal (WAE) - the distance of the widest part of the animal to the oral end of the adesophaegal ctene row
+- Position of widest point of the animal (WAE) - Roundness of the animal: the distance of the widest part of the animal to the oral end of the adesophaegal ctene row
 - Adtentacular ctene row length (ATCL) - the length of the oral to aboral end of the adtentacular ctene row
 - Pharynx length (PL) - the length from the middle point of mouth opening to the aboral end of the ciliary mill (the aboral end of the pharynx)
 - Body length (BL) - the length from the middle of mouth opening to the statocysts
@@ -40,8 +40,9 @@ Continuous measurements:
 - Lobe length (LL) - the length from the tip of the lobe to where the gastrovascular canal under the lobe meets with the paragastric canals.
 - Tentacular plane body width (TABW) - the widest part of the body of the animal excluding lobe on the tentacular axial plane
 - Adesophageal ctene row length (AECL) - the length of the adesophageal ctene row
-- Tentacule bulb length (TBL) - the length of tentacule bulb on the tentacular axis
-- Pharynx width (PW) - the width of the pharynx on the pharyngeal axis
+- Tentacule bulb length (TBL) - the length of tentacule bulb on the oral-aboral axis plane
+- Tentacular plane tentacular bulb length (TATB) - the length of tentacule bulb on the tentacular axial plane
+- Pharynx width (PW) - the width of the pharynx on the oral-aboral axial plane
 - Adtentacular adradial canal length (ATAC) - the length of adradial canal from the last adtentacular ctene plates to the junction on the radial canal
 - Adesophageal adradial canal length (AEAC) - the length of adradial canal from the last adesophageal ctene plates to the junction on the radial canal
 
