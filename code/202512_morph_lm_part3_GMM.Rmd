@@ -46,15 +46,6 @@ df_NoLA <- df_iso %>%
   drop_na() %>%
   filter(if_all(where(is.numeric),  ~ is.finite(.x) & .x != 0))
   #filter(if_all(where(is.numeric), is.finite))
-
-
-
-measure_cols <- colnames(df_NoLA[,7:19])
-#df_NoLA <-  df_NoLA  %>%  
-#  mutate(across(all_of(measure_cols), 
-#                ~ log(.x/exp(mean(log(.x)))), 
-#                .names = "shape_ratio_{.col}"))
-
 ```
 
 ```{r}

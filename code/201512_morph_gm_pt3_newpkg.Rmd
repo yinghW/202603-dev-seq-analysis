@@ -3,9 +3,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #knitr::opts_knit$set(root.dir = "D:/202512-dev-seq-analyses/")
 
 source("data_import.R")
-source("PA_measurement.R")
-source("TA_measurement.R")
-source("OA_measurement.R")
+
 ```
 
 ```{r}
@@ -50,7 +48,7 @@ files <- c("/Volumes/Yinghui/202603-dev-seq-analysis/data/202510-dev-seq-v6.rds"
 df <- lapply(files, readRDS) %>% bind_rows()
 ```
 
-Make sure the landmarks used is the same as the df_iso
+Make sure the landmarks used is the same as the df_gmm_export
 ```{r}
 #df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
 df_gmm_export<- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
@@ -310,7 +308,7 @@ PCA_TA <- gm.prcomp(gpaTA$coords)
 plot(PCA_TA,col = stage)
 ```
 
-Determine the lanmark that contributed te most through PC loadings
+Determine the landmark that contributed te most through PC loadings
 
 for PC1:
 ```{r}
@@ -460,15 +458,15 @@ legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
 with landmarks 6,7 related to lobe removed 
 ```{r}
 pa_final_points <- pa_3d_array[c(3,4,5,6,7,8) , ,]
-gpaTA_2 <- gpagen(ta_final_points)
+gpaPA_2 <- gpagen(pa_final_points)
 ```
 ### morphospace
 
 ```{r}
-shapes <- gpaTA_2$coords
+shapes <- gpaPA$coords
 #stage <- df_NoLA$stage
 #lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
-lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
+lks <- list(c(3,7),c(5,8),c(4,6))
 
 # Generate morphospace
 mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
