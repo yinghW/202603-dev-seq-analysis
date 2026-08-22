@@ -48,7 +48,19 @@ Continuous measurements:
 
 
 ## Dataset description
-The M. leidyi’s time series tracking was done in September and October 2025 and consists of 3 biological replicates (2 biological replicates in October (202510-A, 202510-B), 1 in September (202509-A). Time series of 26 animals and a total of 453 data points (1359 images) were captured. 428 (1284 images) of them were used in constructing Gaussian mixture models, excluding 1 individual that was injured and developed abnormally during the time series and missing measurements, and analyzed. The images are taken every 24-48 hours (mostly every 48 hours). The duration of the time series are around 42 days (for 202509 experiment) and 34 days (for 202510 experiments).
+The *M. leidyi*’s time series tracking was done in September and October 2025 and consists of 3 biological replicates (2 biological replicates in October (202510-A, 202510-B), 1 in September (202509-A). Time series of 26 animals and a total of 453 data points (1359 images) were captured. 428 (1284 images) of them were used in constructing Gaussian mixture models, excluding 1 individual that was injured and developed abnormally during the time series and missing measurements, and analyzed. The images are taken every 24-48 hours (mostly every 48 hours). The duration of the time series are around 42 days (for 202509 experiment) and 34 days (for 202510 experiments).
+
+# Results
+
+## Random forest
+Model was trained on linear measurements standardized by body length (BL).
+
+Classification accuracy of Random Forest based on out-of-bag (OOB) error rates
+
+- cydippid: 87.40157%
+- early_transition: 79.78723%
+- late_transition: 70%
+- lobate: 88.52459%
 
 # Reference
 - Schindelin, J., Arganda-Carreras, I., Frise, E., Kaynig, V., Longair, M., Pietzsch, T., … Cardona, A. (2012). Fiji: an open-source platform for biological-image analysis. Nature Methods, 9(7), 676–682. doi:10.1038/nmeth.2019
