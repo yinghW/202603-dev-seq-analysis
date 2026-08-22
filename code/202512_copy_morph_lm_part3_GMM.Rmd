@@ -144,6 +144,15 @@ ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/gmm_BL_standardized_cl
 #ggsave(file="D:/202603-dev-seq-analysis/fig/GMM_PCA.svg", plot=p3)
 ```
 
+
+
+```{r}
+#svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/GMM_BIC_selected_model.svg", width = 7, height = 7)
+#modelNames = c("VVE", "VEE","EEE", "VEV"),
+plot(mod3, what = 'BIC')
+#dev.off()
+```
+
 ```{r}
 min_idx <- which.min(pca$x[, 1])
 df_gmm_export[min_idx,]
@@ -162,10 +171,6 @@ df_NoLA$cluster_shape_ratio <- as.factor(mod4$classification)
 
 
 ###Finding representing specimens
-
-```{r}
-centroids_3 <- mod3$parameters$mean
-```
 
 ```{r}
 n_clusters <- mod3$G

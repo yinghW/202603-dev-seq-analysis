@@ -109,13 +109,17 @@ confusionMatrix(predictions, testData$stage)
 ## Hyperparameter tuning
 
 ```{r}
-rf_tuned <- randomForest(stage ~ ., data = trainData, ntree = 1000, mtry = 3)
+rf_tuned <- randomForest(stage ~ ., data = trainData, ntree = 1000)
 print(rf_tuned)
 ```
 
 ## result interpretation
 ```{r}
 importance(rf_model)
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/Random_forest_importance.svg", width = 7, height = 7)
 varImpPlot(rf_model)
+dev.off()
+
 ```
 
