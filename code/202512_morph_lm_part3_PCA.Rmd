@@ -199,6 +199,45 @@ pca.plot <- autoplot(pca,
 pca.plot
 ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_cluster.svg", plot=pca.plot)
 ```
+color by size
+```{r}
+df_gmm_size <- df_gmm_export %>%
+  mutate(size_class = 
+           case_when(
+             BL < 1 ~ "<1mm",
+             BL > 1 & BL < 2 ~ "1mm",
+             BL > 2 & BL < 3 ~ "2mm",
+             BL > 3 & BL < 4 ~ "3mm",
+             BL > 4 & BL < 5 ~ "4mm",
+             BL > 5 & BL < 6 ~ "5mm",
+             BL > 6 & BL < 7 ~ "6mm",
+             BL > 7 & BL < 8 ~ "7mm",
+             BL > 8 & BL < 9 ~ "8mm"))
+
+df_test <- df_test %>% mutate(size = df_gmm_size$size_class)
+
+
+library(RColorBrewer)
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector = col_vector[1:9]
+col_vector[4] = "#A6CEE3"
+
+
+#pie(rep(1,n), col=sample(col_vector, n))
+
+
+pca.plot_size <- autoplot(pca,
+                          data = df_test,
+                          colour = 'size')+
+  scale_colour_manual(values = col_vector)+
+  theme_classic()
+
+pca.plot_size
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/PCA_color_by_size_BL_standardized_cluster.svg", plot=pca.plot_size, height = 7, width = 7)
+```
 
 ```{r}
 con1 <- fviz_contrib(pca, choice = "var", axes = 1, top = 10)

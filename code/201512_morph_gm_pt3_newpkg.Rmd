@@ -93,7 +93,39 @@ specs_list <- df_matched %>%
 specs_list<-add_lm13(specs_list)
 ```
 
+# Morphospace example
 
+```{r}
+# Load tail data
+data("tails")
+
+shape_test <- tails$shapes
+spp <- tails$data$species
+wf <- tails$links
+phy <- tails$tree
+
+# Generate morphospace
+mspace(shape_test, links = wf, cex.ldm = 5)
+
+# Get mean shapes of each species
+spp_shapes <- expected_shapes(shapes = tails$shapes, x = tails$data$species)
+
+# Generate morphospace and project:
+msp <- mspace(shapes = shape_test, links = wf, cex.ldm = 5) %>% 
+  # scatter points
+  proj_shapes(shapes = shape_test, col = spp) %>% 
+  # convex hulls enclosing groups
+  proj_groups(shapes = shape_test, groups = spp, alpha = 0.5) %>%
+  # phylogenetic relationships
+    proj_phylogeny(shapes = spp_shapes, tree = phy, lwd = 1.5, 
+                 col.tips = match(phy$tip.label, levels(spp)))
+
+# Plot PC1 against log-size, add legend
+plot_mspace(msp, x = tails$sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4, 
+            alpha.groups = 0.5, col.points = spp, col.groups = 1:nlevels(spp), 
+            phylo = FALSE, xlab = "Log-size", legend = TRUE)
+
+```
 # GM
 
 ## OA
@@ -125,137 +157,65 @@ dim(oa_3d_array)
 gpaOA <- gpagen(oa_3d_array)
 plotAllSpecimens(gpaOA$coords)
 ```
-
-###CVA
-
-```{r}
-CVA_stage=CVA(gpaOA$coords, df_gmm_export$stage, weighting = TRUE,
-	plot = TRUE, rounds = 1000, cv = TRUE)
-CVA_stage
-stage <- as.factor(df_gmm_export$stage)
-plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
-     col = stage,
-     xlab = "CV1", ylab = "CV2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
-
 ### morphospace
 
 ```{r}
+rm(msp,shapes)
+# Rename shapes dimension names to simple sequential numbers ("1", "2", ...)
+dimnames(gpaOA$coords)[[3]] <- as.character(1:dim(gpaOA$coords)[3])
+
+# Extract shapes again to apply the changes
 shapes <- gpaOA$coords
+# the links: TBL, ATCL, AECL, PW
+lks <- list(c(2,3),c(4,5), c(6,7), c(1,8))
+stage <- as.factor(df_gmm_export$stage)
+cluster <- as.factor(df_gmm_export$cluster_shape)
+#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
+sizes <- log(df_gmm_export$BL)
 
-lks <- list(c(4,5), c(6,7))
-
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PCA.svg", width = 9, height = 7)
 # Generate morphospace
-mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
-```
 
-```{r}
-data("tails")
+msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
+  # scatter points
+  proj_shapes(shapes = shapes, col = cluster) %>% 
+  # convex hulls enclosing groups
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE, col = palette5[1:3])
 
-shapes <- tails$shapes
-spp <- tails$data$species
-wf <- tails$links
-phy <- tails$tree
-
-# Generate morphospace
-mspace(shapes, links = wf, cex.ldm = 5)
-
-```
-### between-group PCA
-```{r}
-bwgPCA_stage = groupPCA(gpaOA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
-plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
-
-```{r}
-bwgPCA_stage$groupdists
-bwgPCA_stage$probs
-```
-Determine the landmarks that contributed the most through PC loading
-
-for PC1:
-```{r}
-PCA_OA <- gm.prcomp(gpaOA$coords)
-plot(PCA_OA,col = stage)
-```
-
-```{r}
-oa_rotation <- PCA_OA$rotation
-oa_sdev <- PCA_OA$sdev
-
-# 2. Multiply each rotation column by its component's standard deviation
-oa_loadings <- sweep(oa_rotation, 2, oa_sdev, FUN = "*")
-
-# View the true loadings
-head(oa_loadings)
-```
-```{r}
-loadings_df <- as.data.frame(oa_loadings)
-
-# Group X and Y components per landmark
-landmark_loadings <- sapply(seq(1, nrow(oa_loadings), by = 2), function(i) {
-  sqrt(oa_loadings[i, ]^2 + oa_loadings[i + 1, ]^2)
-})
-
-# Transpose so landmarks are rows and components are columns
-landmark_loadings <- t(landmark_loadings)
-rownames(landmark_loadings) <- paste0("Landmark_", 1:(nrow(oa_loadings)/2))
-
-# Display overall magnitude loading per landmark
-head(landmark_loadings)
-```
-
-scree plot
-```{r}
-# 1. Calculate individual and cumulative variance explained
-if (!is.null(PCA_OA$d)) {
-  var_explained <- (PCA_OA$d^2) / sum(PCA_OA$d^2)
-} else {
-  var_explained <- (PCA_OA$sdev^2) / sum(PCA_OA$sdev^2)
-}
-
-scree_df <- data.frame(
-  PC = factor(paste0("PC", 1:length(var_explained)), levels = paste0("PC", 1:length(var_explained))),
-  Variance = var_explained * 100,
-  Cumulative = cumsum(var_explained * 100)
-)
-
-# 2. Plot with ggplot2
-ggplot(scree_df, aes(x = PC)) +
-  geom_bar(aes(y = Variance), stat = "identity", fill = "steelblue", alpha = 0.8) +
-  geom_line(aes(y = Cumulative, group = 1), color = "firebrick", size = 1) +
-  geom_point(aes(y = Cumulative), color = "firebrick", size = 2) +
-  labs(
-    title = "Scree Plot with Cumulative Variance",
-    x = "Principal Component",
-    y = "Variance Explained (%)"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-Allometric analysis
-```{r}
-ShapeANDsize <- cbind(gpaOA$coords, log(gpaOA$Csize))
-PCASizeShape <- prcomp(ShapeANDsize)
-
-plot(PCASizeShape$x[,1],PCASizeShape$x[,2],
-     col= stage,
-     xlab="RW in size-shape space 1",ylab="RW in size-shape space 2",asp = 1)
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
+plot_mspace(msp, nh = 6, nv = 6, legend = TRUE)
+dev.off()
 
 ```
 
-Use a linear model to conduct MANOVA
+```{r}
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+# Build morphospace first
+msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
+  #proj_shapes(shapes = shapes, col = stage) %>%
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
+
+# Plot PC1 against log-size, add legend
+plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
+            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
+            legend = TRUE)
+dev.off()
+```
 
 ```{r}
-#oa_shape <- gpaOA$coords
-#oa_size <- log(gpaOA$Csize)
-# can refer back to lm part 3
-#ShapeOnSize <- lm(oa_shape ~ oa_size)
-#summary(manova(ShapeOnSize))
+
+# Assign the specimen/sample names from shapes to your sizes vector
+names(sizes) <- dimnames(shapes)[[3]]  # Use rownames(shapes) if shapes is a matrix
+
+# Run 2B Partial Least Squares for shape data
+pls <- pls_shapes(shapes = shapes, X = sizes)
+
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_allometric_axis.svg", width = 7, height = 7)
+#allometrix axis
+mspace(shapes = shapes, links = lks, cex.ldm = 5, nh = 6, nv = 6) %>% 
+ proj_axis( obj = pls,lwd = 3, col = 1, 
+            type = 2, axis = 1)
+dev.off()
 ```
 
 
@@ -290,110 +250,70 @@ gpaTA <- gpagen(ta_3d_array)
 plotAllSpecimens(gpaTA$coords)
 ```
 
-```{r}
-CVA_stage=CVA(gpaTA$coords, df_gmm_export$stage, weighting = TRUE,
-	plot = TRUE, rounds = 1000, cv = TRUE)
-CVA_stage
-stage <- as.factor(df_gmm_export$stage)
-plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
-     col = stage,
-     xlab = "CV1", ylab = "CV2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
-
-
-
-```{r}
-PCA_TA <- gm.prcomp(gpaTA$coords)
-plot(PCA_TA,col = stage)
-```
-
-Determine the landmark that contributed te most through PC loadings
-
-for PC1:
-```{r}
-
-```
-
-### between-group PCA
-```{r}
-bwgPCA_stage=groupPCA(gpaTA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
-plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
-
-Allometric analysis
-```{r}
-ShapeANDsize <- cbind(gpaTA$coords, log(gpaTA$Csize))
-PCASizeShape <- prcomp(ShapeANDsize)
-
-plot(PCASizeShape$x[,1],PCASizeShape$x[,2],
-     col= stage,
-     xlab="RW in size-shape space 1",ylab="RW in size-shape space 2",asp = 1)
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-
-```
-
 ### TA without lobe landmarks
 with landmarks 6,7 related to lobe removed 
 ```{r}
 ta_final_points <- ta_3d_array[c(13,8,9,3,4,5,10,11,12,1,2) , ,]
 gpaTA_2 <- gpagen(ta_final_points)
 ```
+
 ### morphospace
-
 ```{r}
+rm(msp,shapes)
+# Rename shapes dimension names to simple sequential numbers ("1", "2", ...)
+dimnames(gpaOA$coords)[[3]] <- as.character(1:dim(gpaOA$coords)[3])
+
+# Extract shapes again to apply the changes
 shapes <- gpaTA_2$coords
-#stage <- df_gmm_export$stage
-#lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
+# the links: PL+BL, TATB, TABW, TCL
 lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
-
-# Generate morphospace
-mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
-```
-```{r}
-CVA_stage=CVA(gpaTA_2$coords, df_gmm_export$stage, weighting = TRUE,
-	plot = TRUE, rounds = 1000, cv = TRUE)
-CVA_stage
 stage <- as.factor(df_gmm_export$stage)
-plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
-     col = stage,
-     xlab = "CV1", ylab = "CV2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
+#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
+sizes <- log(df_gmm_export$BL)
 
-```{r}
-# Get mean shapes of each stage
-stg_shapes <- expected_shapes(shapes = shapes, x = stage)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PCA.svg", width = 9, height = 7)
+# Generate morphospace
 
-# Generate morphospace and project:
-msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
+msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
   # scatter points
-  proj_shapes(shapes = shapes, col = stage) %>% 
+  proj_shapes(shapes = shapes, col = cluster) %>% 
   # convex hulls enclosing groups
-  proj_groups(shapes = shapes, groups = stage, alpha = 0.5) 
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE)
+
+plot_mspace(msp, nh = 6, nv = 6, legend = TRUE)
+dev.off()
+
 ```
-Allometric analysis
+
 ```{r}
-# remove allometric variation for each species
-d_out <- out * 0
-for(i in 1:nlevels(sp)) {
-  index <- which(sp == levels(sp)[i])
-  mod <- lm(out[index,] ~ size[index])
-  d_out[index,] <- detrend_shapes(mod,
-                                  xvalue = max(size[index]),
-                                  method = "residuals")
-}
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+# Build morphospace first
+msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
+  #proj_shapes(shapes = shapes, col = stage) %>%
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
 
-# get bgPCA
-bgpca <- bg_prcomp(x = d_out, groups = sp)
+# Plot PC1 against log-size, add legend
+plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
+            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
+            legend = TRUE)
+dev.off()
+```
 
-# generate bgPCA morphospace with detrended shapes; project shapes and ellipses
-mspace(ord = bgpca, datype = "fcoef", nh = 8, nv = 6, size.models = 1.5,
-       bg.model = "light gray", invax = c(1,2)) %>%
-  proj_shapes(shapes = d_out, col = sp) %>%
-  proj_groups(shapes = d_out, groups = sp, alpha = 0.4, ellipse = TRUE)
+```{r}
 
+# Assign the specimen/sample names from shapes to your sizes vector
+names(sizes) <- dimnames(shapes)[[3]]  # Use rownames(shapes) if shapes is a matrix
+
+# Run 2B Partial Least Squares for shape data
+pls <- pls_shapes(shapes = shapes, X = sizes)
+
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_allometric_axis.svg", width = 7, height = 7)
+#allometrix axis
+mspace(shapes = shapes, links = lks, cex.ldm = 5, nh = 6, nv = 6) %>% 
+ proj_axis( obj = pls,lwd = 3, col = 1, 
+            type = 2, axis = 1)
+dev.off()
 ```
 
 ## PA
@@ -426,33 +346,6 @@ dim(pa_3d_array)
 gpaPA <- gpagen(pa_3d_array)
 plotAllSpecimens(gpaPA$coords)
 ```
-### LDA
-
-```{r}
-CVA_stage=CVA(gpaPA$coords, df_gmm_export$stage, weighting = TRUE,
-	plot = TRUE, rounds = 1000, cv = TRUE)
-CVA_stage
-stage <- as.factor(df_gmm_export$stage)
-plot(CVA_stage$CVscores[,1], CVA_stage$CVscores[,2], asp = 1,
-     col = stage,
-     xlab = "CV1", ylab = "CV2")
-legend('topright',  col = 1:4, cex = 0.8, pch = 1)
-```
-```{R}
-df <- data.frame(cv1 = CVA_stage$CVscores[,2], stage = stage)
-# Find the exact row with the minimum CV1 in the early_transition stage
-leftmost_purple <- df %>%
-  mutate(original_row = row_number()) %>%
-  filter(stage == "late_transition") %>%
-  slice_max(cv1, n = 1)
-leftmost_purple$original_row
-```
-### between-group PCA
-```{r}
-bwgPCA_stage=groupPCA(gpaPA$coords, stage, rounds = 10000, cv = TRUE, weighting = FALSE)
-plot(bwgPCA_stage$Scores[,1],bwgPCA_stage$Scores[,2], col=stage, asp=1, xlab="bwgPC 1",ylab="bwgPC 2")
-legend('topright', legend = levels(stage), col = 1:4, cex = 0.8, pch = 1)
-```
 
 ### PA without auricle landmarks
 with landmarks 6,7 related to lobe removed 
@@ -463,11 +356,59 @@ gpaPA_2 <- gpagen(pa_final_points)
 ### morphospace
 
 ```{r}
-shapes <- gpaPA$coords
-#stage <- df_NoLA$stage
-#lks <- list(c(13,3,4), c(10,5), c(8,9), c(5,3))
-lks <- list(c(3,7),c(5,8),c(4,6))
+rm(msp,shapes)
+# Rename shapes dimension names to simple sequential numbers ("1", "2", ...)
+#dimnames(gpaOA$coords)[[3]] <- as.character(1:dim(gpaOA$coords)[3])
 
+# Extract shapes again to apply the changes
+shapes <- gpaPA_2$coords
+# the links: ATCL, AECL, PABW
+lks <- list(c(1,5),c(3,6),c(2,4))
+stage <- as.factor(df_gmm_export$stage)
+#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
+sizes <- log(df_gmm_export$BL)
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PCA.svg", width = 9, height = 7)
 # Generate morphospace
-mspace(shapes, groups = stage, links = lks, cex.ldm = 5)
+
+msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
+  # scatter points
+  proj_shapes(shapes = shapes, col = cluster) %>% 
+  # convex hulls enclosing groups
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE)
+
+plot_mspace(msp, nh = 6, nv = 6, legend = TRUE)
+dev.off()
+
+```
+
+```{r}
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+# Build morphospace first
+msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
+  #proj_shapes(shapes = shapes, col = stage) %>%
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
+
+# Plot PC1 against log-size, add legend
+plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
+            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
+            legend = TRUE)
+dev.off()
+```
+
+```{r}
+
+# Assign the specimen/sample names from shapes to your sizes vector
+names(sizes) <- dimnames(shapes)[[3]]  # Use rownames(shapes) if shapes is a matrix
+
+# Run 2B Partial Least Squares for shape data
+pls <- pls_shapes(shapes = shapes, X = sizes)
+
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_allometric_axis.svg", width = 7, height = 7)
+#allometrix axis
+mspace(shapes = shapes, links = lks, cex.ldm = 5, nh = 6, nv = 6) %>% 
+ proj_axis( obj = pls,lwd = 3, col = 1, 
+            type = 2, axis = 1)
+dev.off()
 ```
