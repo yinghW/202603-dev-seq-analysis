@@ -170,15 +170,18 @@ shapes <- gpaOA$coords
 lks <- list(c(2,3),c(4,5), c(6,7), c(1,8))
 stage <- as.factor(df_gmm_export$stage)
 cluster <- as.factor(df_gmm_export$cluster_shape)
-#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
 sizes <- log(df_gmm_export$BL)
 
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PCA.svg", width = 9, height = 7)
+cols_c <- c("1" = "#F57DBF",
+          "2" = "#0DE0A7",
+          "3" = "#33AFF5")
+
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PCA_c.svg", width = 9, height = 7)
 # Generate morphospace
 
 msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
   # scatter points
-  proj_shapes(shapes = shapes, col = cluster) %>% 
+  proj_shapes(shapes = shapes, col = cols_c[cluster]) %>% 
   # convex hulls enclosing groups
   proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE, col = palette5[1:3])
 
@@ -188,16 +191,15 @@ dev.off()
 ```
 
 ```{r}
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/OA_lm_and_PC1_allometric_c.svg", width = 9, height = 7)
 # Build morphospace first
 msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
   #proj_shapes(shapes = shapes, col = stage) %>%
-  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, col = cols_c)
 
 # Plot PC1 against log-size, add legend
 plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
-            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
-            legend = TRUE)
+              col.points = cols_c[as.character(cluster)], col.groups = cols_c, xlab = "Log-size",legend = TRUE)
 dev.off()
 ```
 
@@ -268,17 +270,16 @@ shapes <- gpaTA_2$coords
 # the links: PL+BL, TATB, TABW, TCL
 lks <- list(c(1,4,5), c(6,7), c(2,3), c(4,6))
 stage <- as.factor(df_gmm_export$stage)
-#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
 sizes <- log(df_gmm_export$BL)
 
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PCA.svg", width = 9, height = 7)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PCA_c.svg", width = 9, height = 7)
 # Generate morphospace
 
 msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
   # scatter points
-  proj_shapes(shapes = shapes, col = cluster) %>% 
+  proj_shapes(shapes = shapes, col = cols_c[cluster]) %>% 
   # convex hulls enclosing groups
-  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE)
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE, col = cols_c)
 
 plot_mspace(msp, nh = 6, nv = 6, legend = TRUE)
 dev.off()
@@ -286,15 +287,15 @@ dev.off()
 ```
 
 ```{r}
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/TA_lm_and_PC1_allometric_c.svg", width = 9, height = 7)
 # Build morphospace first
 msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
   #proj_shapes(shapes = shapes, col = stage) %>%
-  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, col = cols_c)
 
 # Plot PC1 against log-size, add legend
 plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
-            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
+            col.points = cols_c[as.character(cluster)], col.groups = cols_c, xlab = "Log of body length",
             legend = TRUE)
 dev.off()
 ```
@@ -365,17 +366,16 @@ shapes <- gpaPA_2$coords
 # the links: ATCL, AECL, PABW
 lks <- list(c(1,5),c(3,6),c(2,4))
 stage <- as.factor(df_gmm_export$stage)
-#stage <- factor(stage, levels = c("cydippid", "early_transition", "late_transition", "lobate"))
 sizes <- log(df_gmm_export$BL)
 
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PCA.svg", width = 9, height = 7)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PCA_c.svg", width = 9, height = 7)
 # Generate morphospace
 
 msp<- mspace(shapes = shapes, links = lks, cex.ldm = 5) %>% 
   # scatter points
-  proj_shapes(shapes = shapes, col = cluster) %>% 
+  proj_shapes(shapes = shapes, col = cols_c[cluster]) %>% 
   # convex hulls enclosing groups
-  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE)
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, legend = TRUE, col = cols_c)
 
 plot_mspace(msp, nh = 6, nv = 6, legend = TRUE)
 dev.off()
@@ -383,15 +383,15 @@ dev.off()
 ```
 
 ```{r}
-svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PC1_allometric.svg", width = 9, height = 7)
+svglite("/Volumes/Yinghui/202603-dev-seq-analysis/fig/PA_lm_and_PC1_allometric_c.svg", width = 9, height = 7)
 # Build morphospace first
 msp <- mspace(shapes = shapes, links = lks, cex.ldm = 5, plot = FALSE) %>% 
   #proj_shapes(shapes = shapes, col = stage) %>%
-  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2)
+  proj_groups(shapes = shapes, groups = cluster, alpha = 0.2, col = cols_c)
 
 # Plot PC1 against log-size, add legend
 plot_mspace(msp, x = sizes, axes = 1, nh = 6, nv = 6, cex.ldm = 4,
-            col.points = cluster, col.groups = 1:nlevels(cluster), xlab = "Log-size",
+            col.points = cols_c[as.character(cluster)], col.groups = cols_c, xlab = "Log-size",
             legend = TRUE)
 dev.off()
 ```

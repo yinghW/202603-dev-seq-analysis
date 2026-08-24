@@ -461,5 +461,9 @@ ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/ATAC_vs_BL_piecewise_r
 
 ```
 
+```{r}
+pp7_9 <- ggarrange(pp7,pp9,ncol = 1, nrow = 2,align = "v")
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/BW_vs_BL_piecewise_regression_cluster.svg", plot=pp7_9,width = 7, height = 7)
+```
 
 
