@@ -81,7 +81,7 @@ lda_con <- ggplot(df_coefs, aes(x = reorder(Feature, Abs_LD1), y = LD1, fill = L
   )
 
 lda_con
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution.svg", plot=lda_con)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/lda_contribution_cluster.svg", plot=lda_con)
 ```
 
 plot
@@ -186,7 +186,7 @@ pca.plot <- autoplot(pca,
   theme_classic()
 
 pca.plot
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_stage.svg", plot=pca.plot)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_stage.svg", plot=pca.plot)
 ```
 color by cluster
 ```{r}
@@ -197,7 +197,7 @@ pca.plot <- autoplot(pca,
   theme_classic()
 
 pca.plot
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_cluster.svg", plot=pca.plot)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/pca_plot_by_cluster.svg", plot=pca.plot)
 ```
 color by size
 ```{r}
@@ -236,7 +236,7 @@ pca.plot_size <- autoplot(pca,
   theme_classic()
 
 pca.plot_size
-ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/PCA_color_by_size_BL_standardized_cluster.svg", plot=pca.plot_size, height = 7, width = 7)
+#ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/PCA_color_by_size_BL_standardized_cluster.svg", plot=pca.plot_size, height = 7, width = 7)
 ```
 
 ```{r}

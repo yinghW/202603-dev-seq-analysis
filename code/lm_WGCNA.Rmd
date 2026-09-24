@@ -1,0 +1,123 @@
+---
+title: "lm_WGCNA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+```{r}
+library("dplyr")
+options(rgl.useNULL=TRUE)
+library("rgl")
+library("tidyverse")
+library("gtools")
+library(lubridate)
+library(gridExtra)
+library(factoextra)
+library(ggplot2)
+library(clustvarsel)
+library(ggpubr)
+library(svglite)
+library(MASS)
+
+# WGCNA
+#install.packages('BiocManager')
+#library(BiocManager)
+#BiocManager::install('WGCNA')
+#BiocManager::install('flashClust')
+library(WGCNA)
+library(flashClust)
+library(curl)
+library(ggcorrplot)
+```
+
+Import the dataframe created in the load_dataframe.rmd
+```{r}
+df_lm <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lm.rds")
+df_lmw <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_lmw.rds")
+df_iso <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_iso.rds")
+#df_NoLA_6.4 <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+#df_NoLA <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_NoLA.rds")
+df_gmm_export <- readRDS("/Volumes/Yinghui/202603-dev-seq-analysis/data/df_gmm_export.rds")
+
+```
+
+# Tutorial
+```{r}
+d <- curl('https://raw.githubusercontent.com/fuzzyatelin/fuzzyatelin.github.io/master/bioanth-stats/module-F21-Group1/FemaleLiver-Data/LiverFemale3600.csv')
+liver.data <- read.csv(file = d, stringsAsFactors = FALSE, header = TRUE)
+head(liver.data)
+```
+## Data Cleaning and Removing Outliers
+```{r}
+# remove extra trait
+expression.data <- liver.data[,-c(1:8)] #removing variables not holding expression data
+
+expression.data <- as.data.frame(t(expression.data)) #transforming the data.frame so columns now represent genes and rows represent samples
+names(expression.data) <- liver.data$substanceBXH
+#renaming the columns so we don't lose the gene IDs
+```
+### identify outlier
+The WGCNA package has a built in function to identify outlier genes called goodSampleGenes(). The function checks the data and returns a list object of samples and genes that pass its filtering criteria. You can adjust how strict the filtering process is by changing the default of the arguments (which can be found under the goodSampleGene documentation, ?goodSampleGenes).
+```{r}
+gsg <-goodSamplesGenes(expression.data)
+summary(gsg)
+```
+Identifying outlier samples
+You can identify outlier samples by using hierarchical clustering. It is probably beneficial to review the clustering module as clustering is used several times within this pathway.
+
+```{r}
+sampleTree <- hclust(dist(expression.data), method = "average") #Clustering samples based on distance 
+
+#Setting the graphical parameters
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+
+#Plotting the cluster dendrogram
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
+cex.axis = 1.5, cex.main = 2)
+
+#Setting the graphical parameters
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
+cex.axis = 1.5, cex.main = 2)
+#draw on line to show cutoff height
+abline(h = 15, col = "red");
+```
+```{r}
+cut.sampleTree <- cutreeStatic(sampleTree, cutHeight = 15, minSize = 10) #returns numeric vector
+#Remove outlier
+expression.data <- expression.data[cut.sampleTree==1, ]
+```
+
+## Network Construction
+```{r}
+
+```
+
+# Correlation analysis
+```{r}
+# clean data
+# from df_iso, getting rid of the data that has NA in measurements that is not lobe or auricle
+df_clean <- df_iso %>% drop_na(-c(ALO, AW, LL, LTM, sd_ALO, sd_AW, sd_LL, sd_LTM))
+
+# turn all lobe and auricle measurements to 0
+df_clean[is.na(df_clean)] <- 0
+
+# extract measurements
+#df_corr <- df_clean[7:23]
+df_corr <- df_clean[24:40]
+
+```
+
+```{r}
+df_corr <- df_corr[-11]
+# plot correlation
+corr <- cor(df_corr, method = "spearman")
+corr_heatmap <- ggcorrplot(corr,hc.order = TRUE, lab = TRUE)
+ggsave(file="/Volumes/Yinghui/202603-dev-seq-analysis/fig/corr_heatmap.svg", plot=corr_heatmap)
+```
